@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Discipline Financière</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: #F0F2F5; color: #111827; min-height: 100vh; }
+  input, button, select { font-family: inherit; outline: none; }
+  ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 2px; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes pop { 0%{transform:scale(0.8);opacity:0} 70%{transform:scale(1.05)} 100%{transform:scale(1);opacity:1} }
+  .fade-in { animation: fadeIn 0.3s ease both; }
+  .pop { animation: pop 0.4s cubic-bezier(.34,1.56,.64,1) both; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// ── SUPABASE RÉEL ────────────────────────────────────────────────────────────
+const { createClient } = window.supabase;
+const supabase = createClient(
+  'https://xfgaczxvnbtohbgrqcsi.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmZ2Fjenh2bmJ0b2hiZ3JxY3NpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NDkzMTUsImV4cCI6MjA5NTAyNTMxNX0.uIOXJS_Yjhi-t596pRonwLUnqN8ea3n0f2xt8IQmh0g'
+);
+
+// ── UTILITAIRES ──────────────────────────────────────────────────────────────
+// Convertit une saisie utilisateur (avec virgules, espaces, points) en nombre
+function parseAmount(val) {
+  const s = String(val).replace(/ /g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : Math.round(n);
+}
+
+// ── CALCUL DU SCORE ──────────────────────────────────────────────────────────
+function calcScore(bilan, params, prevBilan) {
+  let score = 0; const details = {};
+  const pat     = bilan.compte_courant + bilan.epargne + bilan.placement;
+  const prevPat = prevBilan ? prevBilan.compte_courant + prevBilan.epargne + prevBilan.placement : null;
+  const deltaEp = prevBilan ? bilan.epargne   - prevBilan.epargne   : bilan.epargne;
+  const deltaPl = prevBilan ? bilan.placement - prevBilan.placement : bilan.placement;
+
+  details.suivi = true; score += 20;
+  details.patrimoine = prevPat === null || pat >= prevPat; if (details.patrimoine) score += 30;
+  // Si l'objectif est 0 (non alloué), les points sont automatiquement accordés
+  details.epargne   = !params?.objectif_epargne       || deltaEp >= params.objectif_epargne;
+  if (details.epargne)   score += 25;
+  details.placement = !params?.objectif_investissement || deltaPl >= params.objectif_investissement;
+  if (details.placement) score += 25;
+
+  return { score, details, patrimoine: pat, deltaEp, deltaPl };
+}
+
+function scoreColor(s) {
+  if (s >= 90) return '#10B981'; if (s >= 70) return '#3B82F6';
+  if (s >= 50) return '#F59E0B'; return '#EF4444';
+}
+function scoreLabel(s) {
+  if (s >= 90) return 'Excellent 🏆'; if (s >= 70) return 'Bonne gestion 👍';
+  if (s >= 50) return 'À améliorer 📈'; return 'Plan peu respecté 💪';
+}
+function fmt(n) { return Number(n||0).toLocaleString('fr-FR') + ' €'; }
+function moisLabel(m) {
+  if (!m) return '—';
+  const [y, mo] = m.split('-');
+  return `${['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'][parseInt(mo)-1]} ${y}`;
+}
+
+// ── UI ATOMS ─────────────────────────────────────────────────────────────────
+function Card({ children, style }) {
+  return <div style={{ background:'white', borderRadius:16, padding:'18px 20px', boxShadow:'0 1px 4px rgba(0,0,0,0.07)', ...style }}>{children}</div>;
+}
+function Btn({ children, onClick, variant='primary', disabled, style, small }) {
+  const v = { primary:{background:'#1F3864',color:'white'}, gold:{background:'#F59E0B',color:'white'},
+    outline:{background:'transparent',color:'#1F3864',border:'1.5px solid #1F3864'},
+    danger:{background:'#FEF2F2',color:'#B91C1C',border:'1px solid #FECACA'},
+    ghost:{background:'transparent',color:'#6B7280'} };
+  return <button disabled={disabled} onClick={disabled ? undefined : onClick}
+    style={{ border:'none', borderRadius:12, fontWeight:700, cursor:disabled?'not-allowed':'pointer',
+      fontSize:small?13:15, padding:small?'8px 16px':'14px 20px', transition:'all 0.15s',
+      opacity:disabled?0.5:1, ...v[variant], ...style }}>{children}</button>;
+}
+function InputField({ label, value, onChange, type='text', placeholder, suffix, note }) {
+  return (
+    <div style={{ marginBottom:14 }}>
+      <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5, textTransform:'uppercase', letterSpacing:'0.5px' }}>{label}</label>
+      <div style={{ position:'relative' }}>
+        <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder||'0'}
+          style={{ width:'100%', padding: suffix?'11px 44px 11px 14px':'11px 14px',
+            border:'1.5px solid #E5E7EB', borderRadius:10, fontSize:15, color:'#111827', background:'#F9FAFB' }}
+          onFocus={e => e.target.style.borderColor='#1F3864'}
+          onBlur={e => e.target.style.borderColor='#E5E7EB'}/>
+        {suffix && <span style={{ position:'absolute', right:14, top:'50%', transform:'translateY(-50%)', color:'#6B7280', fontSize:14 }}>{suffix}</span>}
+      </div>
+      {note && <p style={{ fontSize:11, color:'#9CA3AF', marginTop:4 }}>{note}</p>}
+    </div>
+  );
+}
+function ScoreGauge({ score, size=160 }) {
+  const r=54, circ=2*Math.PI*r, col=scoreColor(score);
+  return (
+    <svg width={size} height={size} viewBox="0 0 120 120">
+      <circle cx="60" cy="60" r={r} fill="none" stroke="#E5E7EB" strokeWidth="10"/>
+      <circle cx="60" cy="60" r={r} fill="none" stroke={col} strokeWidth="10"
+        strokeDasharray={circ} strokeDashoffset={circ*(1-Math.max(0,Math.min(100,score))/100)}
+        strokeLinecap="round" transform="rotate(-90 60 60)"
+        style={{ transition:'stroke-dashoffset 1s ease, stroke 0.5s' }}/>
+      <text x="60" y="55" textAnchor="middle" fontSize="26" fontWeight="700" fill={col}>{score}</text>
+      <text x="60" y="72" textAnchor="middle" fontSize="10" fill="#6B7280">/100</text>
+    </svg>
+  );
+}
+function PillBadge({ ok, label, pts }) {
+  return (
+    <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 12px',
+      background:ok?'#F0FDF4':'#F9FAFB', borderRadius:10, border:`1px solid ${ok?'#86EFAC':'#E5E7EB'}` }}>
+      <span style={{ fontSize:16 }}>{ok?'✅':'⬜'}</span>
+      <p style={{ flex:1, fontSize:13, fontWeight:600, color:ok?'#065F46':'#6B7280' }}>{label}</p>
+      <span style={{ fontSize:12, fontWeight:700, color:ok?'#10B981':'#9CA3AF' }}>+{pts} pts</span>
+    </div>
+  );
+}
+
+// ── PCTROW — slider bidirectionnel avec blocage à 100% ───────────────────────
+function PctRow({ emoji, label, pct, onChange, revenu, rest, editable }) {
+  const p    = Number(pct) || 0;
+  const maxP = Math.min(100, p + Math.max(0, rest));
+
+  const [eurInput, setEurInput] = useState(String(Math.round(p * revenu / 100) || ''));
+  const [eurFocus, setEurFocus] = useState(false);
+  useEffect(() => { if (!eurFocus) setEurInput(String(Math.round(p * revenu / 100))); }, [pct, revenu]);
+
+  function handlePct(raw) {
+    const v = Math.min(maxP, Math.max(0, Number(raw)||0));
+    onChange(String(v));
+  }
+  function handleEur(raw) {
+    setEurInput(raw);
+    if (!revenu) return;
+    onChange(String(Math.min(maxP, Math.round((Number(raw)||0) / revenu * 100))));
+  }
+
+  return (
+    <div style={{ marginBottom:18 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+        <span style={{ fontSize:13, fontWeight:600, color:'#374151' }}>{emoji} {label}</span>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          {/* Champ % */}
+          <div style={{ display:'flex', alignItems:'center', background:'#F9FAFB', border:'1.5px solid #E5E7EB', borderRadius:8, overflow:'hidden' }}>
+            <input type="number" min="0" max={maxP} value={pct}
+              onChange={e => handlePct(e.target.value)}
+              style={{ width:48, padding:'6px 4px 6px 10px', border:'none', background:'transparent',
+                fontSize:14, fontWeight:700, color:'#1F3864', textAlign:'right' }}/>
+            <span style={{ fontSize:13, color:'#9CA3AF', paddingRight:8, paddingLeft:2 }}>%</span>
+          </div>
+          {/* Champ € — éditable si prop editable, sinon lecture seule */}
+          {editable && revenu > 0 ? (
+            <div style={{ display:'flex', alignItems:'center', background:'#FFFBEB', border:`1.5px solid ${eurFocus?'#F59E0B':'#FDE68A'}`, borderRadius:8, overflow:'hidden', minWidth:80 }}>
+              <input type="number" min="0" value={eurFocus ? eurInput : String(Math.round(p*revenu/100))}
+                onChange={e => handleEur(e.target.value)}
+                onFocus={() => setEurFocus(true)}
+                onBlur={() => setEurFocus(false)}
+                style={{ width:60, padding:'6px 2px 6px 10px', border:'none', background:'transparent', fontSize:14, fontWeight:700, color:'#92400E', textAlign:'right' }}/>
+              <span style={{ fontSize:13, color:'#D97706', paddingRight:8, paddingLeft:2 }}>€</span>
+            </div>
+          ) : (
+            <div style={{ minWidth:80, textAlign:'right', fontSize:14, fontWeight:700, color: revenu>0 ? '#1F3864' : '#9CA3AF' }}>
+              {revenu > 0 ? fmt(Math.round(p*revenu/100)) : '—'}
+            </div>
+          )}
+        </div>
+      </div>
+      {/* Barre + slider */}
+      <div style={{ position:'relative', height:6, background:'#E5E7EB', borderRadius:6 }}>
+        {/* Zone grisée bloquée au-delà du max */}
+        {maxP < 100 && (
+          <div style={{ position:'absolute', left:`${maxP}%`, top:0, height:'100%', right:0,
+            background:'#D1D5DB', borderRadius:'0 6px 6px 0', transition:'left 0.2s' }}/>
+        )}
+        {/* Barre de progression */}
+        <div style={{ position:'absolute', left:0, top:0, height:'100%', width:`${Math.min(100,p)}%`,
+          background:'#1F3864', borderRadius:6, transition:'width 0.15s' }}/>
+        {/* Slider transparent par-dessus — max dynamique bloque le glissement */}
+        <input type="range" min="0" max={maxP} value={p}
+          onChange={e => handlePct(e.target.value)}
+          style={{ position:'absolute', width:'100%', top:'-4px', opacity:0,
+            cursor:'pointer', height:14, margin:0 }}/>
+      </div>
+      {editable && revenu > 0 && (
+        <p style={{ fontSize:10, color:'#D97706', marginTop:4 }}>💡 Tu peux saisir le montant en € directement dans le champ orange</p>
+      )}
+    </div>
+  );
+}
+
+// ── ÉCRAN AUTH ───────────────────────────────────────────────────────────────
+function AuthScreen({ onConnect }) {
+  // mode : 'login' | 'signup' | 'forgot' | 'reset' | 'sent'
+  const [mode,    setMode]    = useState('login');
+  const [email,   setEmail]   = useState('');
+  const [pwd,     setPwd]     = useState('');
+  const [newPwd,  setNewPwd]  = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [err,     setErr]     = useState('');
+  const [msg,     setMsg]     = useState('');
+
+  // Détecter si l'utilisateur arrive depuis un lien de reset
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('type=recovery') || hash.includes('type=signup')) {
+      setMode('reset');
+    }
+  }, []);
+
+  async function submit() {
+    if (!email || !pwd) { setErr('Remplis tous les champs.'); return; }
+    setLoading(true); setErr('');
+    const fn = mode === 'login'
+      ? supabase.auth.signInWithPassword({ email, password: pwd })
+      : supabase.auth.signUp({ email, password: pwd });
+    const { data, error } = await fn;
+    setLoading(false);
+    if (error) setErr(error.message); else onConnect(data.user);
+  }
+
+  async function sendReset() {
+    if (!email) { setErr('Entre ton adresse email.'); return; }
+    setLoading(true); setErr('');
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.href,
+    });
+    setLoading(false);
+    if (error) setErr(error.message);
+    else setMode('sent');
+  }
+
+  async function updatePassword() {
+    if (!newPwd || !confirm) { setErr('Remplis les deux champs.'); return; }
+    if (newPwd !== confirm)  { setErr('Les mots de passe ne correspondent pas.'); return; }
+    if (newPwd.length < 6)   { setErr('Minimum 6 caractères.'); return; }
+    setLoading(true); setErr('');
+    const { error } = await supabase.auth.updateUser({ password: newPwd });
+    setLoading(false);
+    if (error) setErr(error.message);
+    else { setMsg('Mot de passe modifié !'); setTimeout(() => setMode('login'), 2000); }
+  }
+
+  const wrap = (children) => (
+    <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, background:'linear-gradient(160deg,#1F3864 0%,#2E5FA3 100%)' }}>
+      <div className="pop" style={{ width:'100%', maxWidth:380 }}>
+        <div style={{ textAlign:'center', marginBottom:32 }}>
+          <div style={{ fontSize:52, marginBottom:8 }}>🏆</div>
+          <h1 style={{ color:'white', fontSize:26, fontWeight:800 }}>Discipline Financière</h1>
+          <p style={{ color:'rgba(255,255,255,0.65)', marginTop:6, fontSize:14 }}>Construis de bonnes habitudes,<br/>mois après mois.</p>
+        </div>
+        {children}
+        <p style={{ color:'rgba(255,255,255,0.4)', fontSize:11, textAlign:'center', marginTop:16 }}>
+          Inscris-toi avec ton email pour créer ton espace
+        </p>
+      </div>
+    </div>
+  );
+
+  // Écran : nouveau mot de passe (depuis le lien email)
+  if (mode === 'reset') return wrap(
+    <Card>
+      <h2 style={{ fontSize:18, fontWeight:700, marginBottom:6 }}>🔐 Nouveau mot de passe</h2>
+      <p style={{ fontSize:13, color:'#6B7280', marginBottom:16 }}>Choisis un mot de passe sécurisé.</p>
+      <InputField label="Nouveau mot de passe" value={newPwd} onChange={setNewPwd} type="password" placeholder="Min. 6 caractères"/>
+      <InputField label="Confirmer" value={confirm} onChange={setConfirm} type="password" placeholder="Répète le mot de passe"/>
+      {err && <p style={{ color:'#B91C1C', fontSize:13, marginBottom:12, background:'#FEF2F2', padding:'8px 12px', borderRadius:8 }}>⚠️ {err}</p>}
+      {msg && <p style={{ color:'#065F46', fontSize:13, marginBottom:12, background:'#D1FAE5', padding:'8px 12px', borderRadius:8 }}>✅ {msg}</p>}
+      <Btn onClick={updatePassword} disabled={loading} style={{ width:'100%' }} variant="gold">
+        {loading ? '...' : 'Enregistrer le nouveau mot de passe'}
+      </Btn>
+    </Card>
+  );
+
+  // Écran : email envoyé
+  if (mode === 'sent') return wrap(
+    <Card style={{ textAlign:'center' }}>
+      <div style={{ fontSize:48, marginBottom:12 }}>📬</div>
+      <h2 style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Email envoyé !</h2>
+      <p style={{ fontSize:13, color:'#6B7280', marginBottom:20, lineHeight:1.6 }}>
+        Vérifie ta boîte mail et clique sur le lien pour créer un nouveau mot de passe.
+      </p>
+      <button onClick={() => setMode('login')} style={{ background:'none', border:'none', color:'#2E5FA3', fontSize:13, cursor:'pointer', fontWeight:600 }}>
+        ← Retour à la connexion
+      </button>
+    </Card>
+  );
+
+  // Écran : mot de passe oublié
+  if (mode === 'forgot') return wrap(
+    <Card>
+      <h2 style={{ fontSize:18, fontWeight:700, marginBottom:6 }}>🔑 Mot de passe oublié</h2>
+      <p style={{ fontSize:13, color:'#6B7280', marginBottom:16 }}>Entre ton email et on t'envoie un lien pour le réinitialiser.</p>
+      <InputField label="Email" value={email} onChange={setEmail} type="email" placeholder="toi@exemple.fr"/>
+      {err && <p style={{ color:'#B91C1C', fontSize:13, marginBottom:12, background:'#FEF2F2', padding:'8px 12px', borderRadius:8 }}>⚠️ {err}</p>}
+      <Btn onClick={sendReset} disabled={loading} style={{ width:'100%' }}>
+        {loading ? '...' : 'Envoyer le lien'}
+      </Btn>
+      <button onClick={() => { setMode('login'); setErr(''); }}
+        style={{ display:'block', margin:'14px auto 0', background:'none', border:'none', color:'#6B7280', fontSize:13, cursor:'pointer' }}>
+        ← Retour à la connexion
+      </button>
+    </Card>
+  );
+
+  // Écran : connexion / inscription
+  return wrap(
+    <Card>
+      <h2 style={{ fontSize:18, fontWeight:700, marginBottom:20 }}>{mode==='login'?'Connexion':'Créer un compte'}</h2>
+      <InputField label="Email" value={email} onChange={setEmail} type="email" placeholder="toi@exemple.fr"/>
+      <InputField label="Mot de passe" value={pwd} onChange={setPwd} type="password" placeholder="••••••••"/>
+      {err && <p style={{ color:'#B91C1C', fontSize:13, marginBottom:12, background:'#FEF2F2', padding:'8px 12px', borderRadius:8 }}>⚠️ {err}</p>}
+      <Btn onClick={submit} disabled={loading} style={{ width:'100%' }}>
+        {loading ? '...' : (mode==='login' ? 'Se connecter' : "S'inscrire")}
+      </Btn>
+      {mode === 'login' && (
+        <button onClick={() => { setMode('forgot'); setErr(''); }}
+          style={{ display:'block', margin:'12px auto 0', background:'none', border:'none', color:'#2E5FA3', fontSize:13, cursor:'pointer', fontWeight:600 }}>
+          Mot de passe oublié ?
+        </button>
+      )}
+      <button onClick={() => { setMode(mode==='login'?'signup':'login'); setErr(''); }}
+        style={{ display:'block', margin:'10px auto 0', background:'none', border:'none', color:'#6B7280', fontSize:13, cursor:'pointer' }}>
+        {mode==='login' ? "Pas encore de compte ? S'inscrire" : 'Déjà un compte ? Se connecter'}
+      </button>
+    </Card>
+  );
+}
+
+// ── ÉCRAN PARAMÈTRES ─────────────────────────────────────────────────────────
+function ParamsScreen({ user, params, onSave, onBack, isOnboarding }) {
+  const toP = (m, r) => r > 0 ? String(Math.round((m||0) / r * 100)) : '';
+  const [revenu,   setRevenu]   = useState(String(params?.revenu || ''));
+  const [pCharges, setPCharges] = useState(toP(params?.objectif_charges,       params?.revenu) || '');
+  const [pPlaisir, setPPlaisir] = useState(toP(params?.objectif_plaisir,       params?.revenu) || '');
+  const [pEpargne, setPEpargne] = useState(toP(params?.objectif_epargne,       params?.revenu) || '');
+  const [pInvest,  setPInvest]  = useState(toP(params?.objectif_investissement,params?.revenu) || '');
+  const [saving, setSaving] = useState(false);
+
+  const rev    = Number(revenu) || 0;
+  const pTotal = [pCharges,pPlaisir,pEpargne,pInvest].reduce((s,v) => s+(Number(v)||0), 0);
+  const rest   = 100 - pTotal;
+  const toEur  = p => Math.round((Number(p)||0) * rev / 100);
+  const totalColor = pTotal > 100 ? '#B91C1C' : pTotal === 100 ? '#10B981' : '#F59E0B';
+
+  async function save() {
+    setSaving(true);
+    const data = { user_id: user.id, revenu: rev,
+      objectif_charges: toEur(pCharges), objectif_plaisir: toEur(pPlaisir),
+      objectif_epargne: toEur(pEpargne), objectif_investissement: toEur(pInvest) };
+    await supabase.from('params').upsert(data);
+    setSaving(false);
+    onSave(data);
+  }
+
+  return (
+    <div style={{ minHeight:'100vh', background:'#F0F2F5', paddingBottom:40 }}>
+      <div style={{ background:'#1F3864', padding:'20px 20px 28px', position:'sticky', top:0, zIndex:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          {!isOnboarding && <button onClick={onBack} style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:8, padding:'6px 10px', cursor:'pointer', fontSize:16 }}>←</button>}
+          <div>
+            <h1 style={{ color:'white', fontSize:18, fontWeight:700 }}>⚙️ Mes Paramètres</h1>
+            <p style={{ color:'rgba(255,255,255,0.6)', fontSize:12, marginTop:2 }}>
+              {isOnboarding ? 'Configure ton profil pour démarrer' : 'Modifie tes objectifs'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ padding:'20px 16px', maxWidth:500, margin:'0 auto' }}>
+        <Card style={{ marginBottom:16 }}>
+          <h3 style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:14, textTransform:'uppercase', letterSpacing:'0.5px' }}>💰 Revenu mensuel net</h3>
+          <InputField label="Montant" value={revenu} onChange={setRevenu} type="number" suffix="€"
+            note="Ton salaire net — tous les % se calculent depuis ce chiffre"/>
+        </Card>
+
+        <Card style={{ marginBottom:16 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+            <h3 style={{ fontSize:14, fontWeight:700, color:'#374151', textTransform:'uppercase', letterSpacing:'0.5px' }}>🎯 Répartition du revenu</h3>
+            <span style={{ fontSize:12, padding:'3px 10px', borderRadius:20, fontWeight:700,
+              background: pTotal>100?'#FEF2F2':pTotal===100?'#D1FAE5':'#FEF3C7', color: totalColor }}>
+              {pTotal}% alloué
+            </span>
+          </div>
+          <div style={{ display:'flex', justifyContent:'flex-end', gap:8, marginBottom:12 }}>
+            <span style={{ fontSize:10, color:'#9CA3AF', width:64, textAlign:'center', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px' }}>%</span>
+            <span style={{ fontSize:10, color:'#9CA3AF', width:80, textAlign:'right', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px' }}>Montant</span>
+          </div>
+          {/* rest calculé pour chaque ligne = reste global + part de cette ligne (elle peut toujours descendre) */}
+          <PctRow emoji="🏠" label="Charges fixes"         pct={pCharges} onChange={setPCharges} revenu={rev} rest={rest} editable={true}/>
+          <PctRow emoji="🎉" label="Dépenses plaisir"      pct={pPlaisir} onChange={setPPlaisir} revenu={rev} rest={rest} editable={true}/>
+          <PctRow emoji="🏦" label="Épargne / mois"        pct={pEpargne} onChange={setPEpargne} revenu={rev} rest={rest} editable={true}/>
+          <PctRow emoji="📈" label="Investissement / mois" pct={pInvest}  onChange={setPInvest}  revenu={rev} rest={rest} editable={true}/>
+
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center',
+            padding:'10px 14px', marginTop:4, borderRadius:10,
+            background: pTotal>100?'#FEF2F2':'#F9FAFB', border:`1px solid ${pTotal>100?'#FECACA':'#E5E7EB'}` }}>
+            <span style={{ fontSize:13, fontWeight:600, color:'#374151' }}>
+              {pTotal>100 ? '⚠️ Dépassement' : pTotal===100 ? '✅ Tout alloué' : '⬜ Non alloué'}
+            </span>
+            <span style={{ fontSize:13, fontWeight:700, color: totalColor }}>
+              {rest>=0 ? `${rest}%` : `+${-rest}%`}
+              {rev > 0 && <span style={{ fontSize:12, color:'#9CA3AF', marginLeft:6 }}>({fmt(Math.abs(Math.round(rest*rev/100)))})</span>}
+            </span>
+          </div>
+        </Card>
+
+        {pTotal > 100 && (
+          <div style={{ background:'#FEF2F2', border:'1px solid #FECACA', borderRadius:12, padding:'12px 16px', marginBottom:16 }}>
+            <p style={{ color:'#B91C1C', fontSize:13 }}>⚠️ Le total dépasse 100%. Réduis un ou plusieurs postes.</p>
+          </div>
+        )}
+        <Btn onClick={save} disabled={saving || !revenu || pTotal > 100} style={{ width:'100%' }} variant="gold">
+          {saving ? '...' : (isOnboarding ? '🚀 Démarrer mon suivi' : '✅ Enregistrer')}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── ÉCRAN AJOUTER UN MOIS ────────────────────────────────────────────────────
+function AddMonthScreen({ user, bilans, params, onSave, onBack }) {
+  const now = new Date();
+  const [mois, setMois] = useState(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
+  const [cc, setCc] = useState('');
+  const [ep, setEp] = useState('');
+  const [pl, setPl] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const sorted = [...bilans].sort((a,b) => a.mois.localeCompare(b.mois));
+  const prev = sorted.at(-1);
+  const cur = { compte_courant: parseAmount(cc), epargne: parseAmount(ep), placement: parseAmount(pl), mois };
+  const { score, details, patrimoine, deltaEp, deltaPl } = calcScore(cur, params, prev);
+  const hasValues = cc || ep || pl;
+
+  async function save() {
+    setSaving(true);
+    await supabase.from('bilans').insert({ user_id: user.id, mois, compte_courant: parseAmount(cc), epargne: parseAmount(ep), placement: parseAmount(pl) });
+    setSaving(false); onSave();
+  }
+
+  return (
+    <div style={{ minHeight:'100vh', background:'#F0F2F5', paddingBottom:40 }}>
+      <div style={{ background:'#1F3864', padding:'20px 20px 28px', position:'sticky', top:0, zIndex:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <button onClick={onBack} style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:8, padding:'6px 10px', cursor:'pointer', fontSize:16 }}>←</button>
+          <div>
+            <h1 style={{ color:'white', fontSize:18, fontWeight:700 }}>📅 Bilan du mois</h1>
+            <p style={{ color:'rgba(255,255,255,0.6)', fontSize:12, marginTop:2 }}>Renseigne tes soldes actuels</p>
+          </div>
+        </div>
+      </div>
+      <div style={{ padding:'20px 16px', maxWidth:500, margin:'0 auto' }}>
+        <Card style={{ marginBottom:16 }}>
+          <h3 style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:14, textTransform:'uppercase', letterSpacing:'0.5px' }}>📋 Période</h3>
+          <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5, textTransform:'uppercase', letterSpacing:'0.5px' }}>Mois</label>
+          <input type="month" value={mois} onChange={e => setMois(e.target.value)}
+            style={{ width:'100%', padding:'11px 14px', border:'1.5px solid #E5E7EB', borderRadius:10, fontSize:15, color:'#111827', background:'#F9FAFB' }}
+            onFocus={e => e.target.style.borderColor='#1F3864'}
+            onBlur={e => e.target.style.borderColor='#E5E7EB'}/>
+        </Card>
+        <Card style={{ marginBottom:16 }}>
+          <h3 style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:14, textTransform:'uppercase', letterSpacing:'0.5px' }}>💳 Mes soldes actuels</h3>
+          <InputField label="Compte courant (total)" value={cc} onChange={setCc} type="number" suffix="€" note="Solde total — tu peux écrire 1500 ou 1 500"/>
+          <InputField label="Épargne (total)" value={ep} onChange={setEp} type="number" suffix="€" note="Livret A, LEP, etc. — montant total actuel (ex: 4500)"/>
+          <InputField label="Placements (total)" value={pl} onChange={setPl} type="number" suffix="€" note="PEA, crypto, etc. — valeur totale actuelle"/>
+        </Card>
+        {hasValues && (
+          <Card style={{ marginBottom:16 }} className="fade-in">
+            <h3 style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:14, textTransform:'uppercase', letterSpacing:'0.5px' }}>🏆 Aperçu de ton score</h3>
+            <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:16 }}>
+              <ScoreGauge score={score} size={100}/>
+              <div>
+                <p style={{ fontSize:22, fontWeight:800, color:scoreColor(score) }}>{score}/100</p>
+                <p style={{ fontSize:14, color:'#374151', fontWeight:600, marginTop:2 }}>{scoreLabel(score)}</p>
+                <p style={{ fontSize:12, color:'#6B7280', marginTop:4 }}>Patrimoine : {fmt(patrimoine)}</p>
+              </div>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+              <PillBadge ok={details.suivi}     label="Suivi complété"                    pts={20}/>
+              <PillBadge ok={details.patrimoine} label="Patrimoine stable ou en hausse"   pts={30}/>
+              <PillBadge ok={details.epargne}   label={`Épargne objectif (+${fmt(deltaEp)} ce mois)`}  pts={25}/>
+              <PillBadge ok={details.placement} label={`Investissement objectif (+${fmt(deltaPl)} ce mois)`} pts={25}/>
+            </div>
+          </Card>
+        )}
+        {prev && (
+          <div style={{ background:'#EFF6FF', border:'1px solid #BFDBFE', borderRadius:12, padding:'12px 16px', marginBottom:16 }}>
+            <p style={{ fontSize:12, color:'#1D4ED8', fontWeight:600 }}>📊 Dernier bilan : {moisLabel(prev.mois)}</p>
+            <p style={{ fontSize:12, color:'#1E40AF', marginTop:4 }}>Épargne : {fmt(prev.epargne)} · Placement : {fmt(prev.placement)}</p>
+          </div>
+        )}
+        <Btn onClick={save} disabled={saving || !mois} style={{ width:'100%' }}>
+          {saving ? '...' : '✅ Enregistrer ce mois'}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── DASHBOARD ────────────────────────────────────────────────────────────────
+function DashboardScreen({ bilans, params, onAddMonth, onParams, onDeconnexion, onDeleteBilan }) {
+  const sorted = [...bilans].sort((a,b) => a.mois.localeCompare(b.mois));
+  const last = sorted.at(-1);
+  const prev = sorted.length >= 2 ? sorted.at(-2) : null;
+  const { score, details, patrimoine, deltaEp, deltaPl } = last
+    ? calcScore(last, params, prev)
+    : { score:0, details:{}, patrimoine:0, deltaEp:0, deltaPl:0 };
+  const col = scoreColor(score);
+  const [deleting, setDeleting] = useState(null);
+
+  return (
+    <div style={{ minHeight:'100vh', background:'#F0F2F5', paddingBottom:100 }}>
+      {/* Header */}
+      <div style={{ background:'linear-gradient(135deg,#1F3864 0%,#2E5FA3 100%)', padding:'24px 20px 80px' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+          <div>
+            <p style={{ color:'rgba(255,255,255,0.65)', fontSize:13 }}>Mon tableau de bord</p>
+            <h1 style={{ color:'white', fontSize:22, fontWeight:800, marginTop:2 }}>Discipline Financière 🏆</h1>
+          </div>
+          {/* Bouton Déconnexion dans le header */}
+          <button onClick={onDeconnexion}
+            style={{ background:'rgba(255,255,255,0.15)', border:'none', color:'white', borderRadius:10, padding:'8px 14px', cursor:'pointer', fontSize:13, fontWeight:600 }}>
+            🔓 Déconnexion
+          </button>
+        </div>
+      </div>
+
+      <div style={{ padding:'0 16px', maxWidth:500, margin:'0 auto', marginTop:-52 }}>
+        {!last ? (
+          <Card className="pop" style={{ textAlign:'center', padding:'40px 24px' }}>
+            <div style={{ fontSize:52, marginBottom:12 }}>🚀</div>
+            <h2 style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Prêt à démarrer ?</h2>
+            <p style={{ color:'#6B7280', fontSize:14, marginBottom:24, lineHeight:1.6 }}>Ajoute ton premier bilan mensuel pour obtenir ton score de discipline financière.</p>
+            <Btn onClick={onAddMonth} variant="gold" style={{ width:'100%' }}>📅 Ajouter mon premier mois</Btn>
+          </Card>
+        ) : (
+          <>
+            <Card className="pop" style={{ marginBottom:14 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:16, marginBottom:16 }}>
+                <ScoreGauge score={score} size={110}/>
+                <div style={{ flex:1 }}>
+                  <p style={{ fontSize:12, color:'#9CA3AF', textTransform:'uppercase', letterSpacing:'0.5px', fontWeight:600 }}>Score — {moisLabel(last.mois)}</p>
+                  <p style={{ fontSize:30, fontWeight:900, color:col, lineHeight:1 }}>{score}<span style={{ fontSize:16, fontWeight:600, color:'#9CA3AF' }}>/100</span></p>
+                  <p style={{ fontSize:14, fontWeight:700, color:'#374151', marginTop:4 }}>{scoreLabel(score)}</p>
+                  <div style={{ marginTop:8, height:6, background:'#E5E7EB', borderRadius:10, overflow:'hidden' }}>
+                    <div style={{ height:'100%', width:`${score}%`, background:col, borderRadius:10, transition:'width 1s ease' }}/>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                <PillBadge ok={details.suivi}      label="Suivi complété"                    pts={20}/>
+                <PillBadge ok={details.patrimoine}  label="Patrimoine stable / en hausse"    pts={30}/>
+                <PillBadge ok={details.epargne}    label="Objectif épargne atteint"          pts={25}/>
+                <PillBadge ok={details.placement}  label="Objectif investissement atteint"   pts={25}/>
+              </div>
+            </Card>
+
+            {/* KPIs */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+              {[
+                ['Patrimoine total', fmt(patrimoine), prev && (patrimoine >= prev.compte_courant+prev.epargne+prev.placement ? '▲' : '▼')],
+                ['Épargne ce mois', fmt(deltaEp), params?.objectif_epargne>0 ? `Obj. ${fmt(params.objectif_epargne)}` : null],
+                ['Compte courant', fmt(last.compte_courant), null],
+                ['Placement ce mois', fmt(deltaPl), params?.objectif_investissement>0 ? `Obj. ${fmt(params.objectif_investissement)}` : null],
+              ].map(([label, val, sub]) => (
+                <Card key={label}>
+                  <p style={{ fontSize:11, color:'#9CA3AF', fontWeight:700, textTransform:'uppercase', marginBottom:4 }}>{label}</p>
+                  <p style={{ fontSize:18, fontWeight:800, color:'#1F3864' }}>{val}</p>
+                  {sub && <p style={{ fontSize:11, color:'#6B7280', marginTop:3 }}>{sub}</p>}
+                </Card>
+              ))}
+            </div>
+
+            {/* Historique */}
+            <Card style={{ marginBottom:14 }}>
+              <h3 style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:14, textTransform:'uppercase', letterSpacing:'0.5px' }}>📈 Historique</h3>
+              <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                {[...sorted].reverse().map((b) => {
+                  const p2 = sorted[sorted.indexOf(b)-1];
+                  const { score:s, patrimoine:pat } = calcScore(b, params, p2);
+                  const c = scoreColor(s);
+                  return (
+                    <div key={b.id} style={{ display:'flex', alignItems:'center', gap:12, padding:'10px 12px', background:'#F9FAFB', borderRadius:10 }}>
+                      <div style={{ width:42, height:42, borderRadius:21, border:`3px solid ${c}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                        <span style={{ fontSize:13, fontWeight:800, color:c }}>{s}</span>
+                      </div>
+                      <div style={{ flex:1 }}>
+                        <p style={{ fontSize:14, fontWeight:700 }}>{moisLabel(b.mois)}</p>
+                        <p style={{ fontSize:12, color:'#6B7280' }}>Patrimoine : {fmt(pat)}</p>
+                      </div>
+                      <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                        <span style={{ fontSize:11, padding:'3px 8px', borderRadius:20, background:`${c}20`, color:c, fontWeight:700 }}>{s}/100</span>
+                        {deleting === b.id ? (
+                          <button onClick={async () => { await onDeleteBilan(b.id); setDeleting(null); }}
+                            style={{ background:'#FEF2F2', border:'none', color:'#B91C1C', borderRadius:8, padding:'4px 8px', cursor:'pointer', fontSize:11, fontWeight:700 }}>✓ Confirmer</button>
+                        ) : (
+                          <button onClick={() => setDeleting(deleting===b.id?null:b.id)}
+                            style={{ background:'transparent', border:'none', color:'#D1D5DB', cursor:'pointer', fontSize:14, padding:'4px' }}>🗑</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {params && (
+              <Card style={{ marginBottom:14 }}>
+                <h3 style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:12, textTransform:'uppercase', letterSpacing:'0.5px' }}>🎯 Mes objectifs mensuels</h3>
+                {[['💰 Revenu', fmt(params.revenu)], ['🏠 Charges', fmt(params.objectif_charges)],
+                  ['🎉 Plaisir', fmt(params.objectif_plaisir)], ['🏦 Épargne', fmt(params.objectif_epargne)],
+                  ['📈 Investissement', fmt(params.objectif_investissement)]].map(([l,v]) => (
+                  <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid #F3F4F6' }}>
+                    <span style={{ fontSize:13, color:'#374151' }}>{l}</span>
+                    <span style={{ fontSize:13, fontWeight:700, color:'#1F3864' }}>{v}</span>
+                  </div>
+                ))}
+              </Card>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── APP PRINCIPALE ────────────────────────────────────────────────────────────
+function App() {
+  const [user,   setUser]   = useState(null);
+  const [params, setParams] = useState(null);
+  const [bilans, setBilans] = useState([]);
+  const [screen, setScreen] = useState('dashboard');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) { setUser(data.session.user); await loadData(data.session.user.id); }
+      setLoading(false);
+    })();
+  }, []);
+
+  async function loadData(uid) {
+    const { data: p } = await supabase.from('params').select().eq('user_id', uid).single();
+    setParams(p);
+    const { data: b } = await supabase.from('bilans').select().eq('user_id', uid).order('mois');
+    setBilans(b || []);
+  }
+
+  async function handleConnect(u) { setUser(u); await loadData(u.id); }
+
+  async function handleDeconnexion() {
+    await supabase.auth.signOut();
+    setUser(null); setParams(null); setBilans([]); setScreen('dashboard');
+  }
+
+  async function handleDeleteBilan(id) {
+    await supabase.from('bilans').delete().eq('id', id);
+    await loadData(user.id);
+  }
+
+  if (loading) return (
+    <div style={{ minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center', background:'#1F3864' }}>
+      <div style={{ textAlign:'center', color:'white' }}>
+        <div style={{ fontSize:48, marginBottom:12 }}>🏆</div>
+        <p style={{ fontSize:14, opacity:0.7 }}>Chargement...</p>
+      </div>
+    </div>
+  );
+
+  if (!user)   return <AuthScreen onConnect={handleConnect}/>;
+  if (!params) return <ParamsScreen user={user} params={null} onSave={p => { setParams(p); setScreen('dashboard'); }} isOnboarding={true}/>;
+
+  return (
+    <div style={{ maxWidth:500, margin:'0 auto', position:'relative' }}>
+      {screen === 'dashboard' && (
+        <DashboardScreen bilans={bilans} params={params}
+          onAddMonth={() => setScreen('add')}
+          onParams={() => setScreen('params')}
+          onDeconnexion={handleDeconnexion}
+          onDeleteBilan={handleDeleteBilan}/>
+      )}
+      {screen === 'add'    && <AddMonthScreen user={user} bilans={bilans} params={params} onSave={async () => { await loadData(user.id); setScreen('dashboard'); }} onBack={() => setScreen('dashboard')}/>}
+      {screen === 'params' && <ParamsScreen user={user} params={params} onSave={p => { setParams(p); setScreen('dashboard'); }} onBack={() => setScreen('dashboard')}/>}
+
+      {/* Barre de navigation — Paramètres à droite, + au centre */}
+      {screen === 'dashboard' && (
+        <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:500,
+          background:'white', borderTop:'1px solid #E5E7EB',
+          padding:'10px 0 max(10px, env(safe-area-inset-bottom))',
+          display:'flex', zIndex:100 }}>
+          <button onClick={() => setScreen('dashboard')}
+            style={{ flex:1, background:'none', border:'none', cursor:'pointer', padding:'6px 0', display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+            <span style={{ fontSize:20 }}>📊</span>
+            <span style={{ fontSize:10, fontWeight:700, color:'#1F3864' }}>Tableau de bord</span>
+          </button>
+          <div style={{ flex:1, display:'flex', justifyContent:'center', alignItems:'center', paddingBottom:4 }}>
+            <button onClick={() => setScreen('add')}
+              style={{ width:52, height:52, borderRadius:26, background:'#F59E0B', border:'none', cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                boxShadow:'0 4px 14px rgba(245,158,11,0.4)', fontSize:24, color:'white', fontWeight:700 }}>
+              +
+            </button>
+          </div>
+          {/* Bouton Paramètres à droite */}
+          <button onClick={() => setScreen('params')}
+            style={{ flex:1, background:'none', border:'none', cursor:'pointer', padding:'6px 0', display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+            <span style={{ fontSize:20 }}>⚙️</span>
+            <span style={{ fontSize:10, fontWeight:700, color:'#1F3864' }}>Paramètres</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
