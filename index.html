@@ -17,6 +17,12 @@
   @keyframes pop { 0%{transform:scale(0.8);opacity:0} 70%{transform:scale(1.05)} 100%{transform:scale(1);opacity:1} }
   .fade-in { animation: fadeIn 0.3s ease both; }
   .pop { animation: pop 0.4s cubic-bezier(.34,1.56,.64,1) both; }
+  /* Desktop : centrer et élargir */
+  @media (min-width: 640px) {
+    #root { display: flex; justify-content: center; background: #1F3864; min-height: 100vh; }
+    .app-shell { width: 100%; max-width: 680px; background: #F0F2F5; min-height: 100vh; box-shadow: 0 0 60px rgba(0,0,0,0.4); }
+    .auth-wrap { max-width: 480px !important; }
+  }
 </style>
 </head>
 <body>
@@ -129,13 +135,64 @@ function PillBadge({ ok, label, pts }) {
 }
 
 // ── PCTROW — slider bidirectionnel avec blocage à 100% ───────────────────────
+// ── SLIDER TACTILE (souris + mobile) ─────────────────────────────────────────
+function SliderBar({ p, maxP, onMove }) {
+  const barRef = React.useRef(null);
+
+  function calc(clientX) {
+    const rect = barRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    onMove(Math.round(ratio * maxP));
+  }
+  function onMouseDown(e) {
+    e.preventDefault();
+    calc(e.clientX);
+    const move = (e) => calc(e.clientX);
+    const up   = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  }
+  function onTouchStart(e) {
+    e.preventDefault();
+    calc(e.touches[0].clientX);
+    const move = (e) => calc(e.touches[0].clientX);
+    const end  = () => { window.removeEventListener('touchmove', move); window.removeEventListener('touchend', end); };
+    window.addEventListener('touchmove', move, { passive: false });
+    window.addEventListener('touchend', end);
+  }
+
+  return (
+    <div ref={barRef} onMouseDown={onMouseDown} onTouchStart={onTouchStart}
+      style={{ position:'relative', height:22, display:'flex', alignItems:'center', cursor:'pointer', userSelect:'none', margin:'2px 0' }}>
+      <div style={{ position:'absolute', left:0, right:0, height:6, background:'#E5E7EB', borderRadius:6 }}>
+        {maxP < 100 && (
+          <div style={{ position:'absolute', left:`${maxP}%`, top:0, bottom:0, right:0,
+            background:'#D1D5DB', borderRadius:'0 6px 6px 0' }}/>
+        )}
+        <div style={{ position:'absolute', left:0, top:0, bottom:0, width:`${Math.min(100,p)}%`,
+          background:'#1F3864', borderRadius:6 }}/>
+      </div>
+      <div style={{ position:'absolute', left:`${Math.min(maxP,p)}%`, top:'50%',
+        transform:'translate(-50%,-50%)', width:20, height:20, borderRadius:10,
+        background:'#1F3864', border:'2px solid white',
+        boxShadow:'0 1px 4px rgba(0,0,0,0.3)', pointerEvents:'none' }}/>
+    </div>
+  );
+}
+
 function PctRow({ emoji, label, pct, onChange, revenu, rest, editable }) {
   const p    = Number(pct) || 0;
   const maxP = Math.min(100, p + Math.max(0, rest));
 
   const [eurInput, setEurInput] = useState(String(Math.round(p * revenu / 100) || ''));
-  const [eurFocus, setEurFocus] = useState(false);
-  useEffect(() => { if (!eurFocus) setEurInput(String(Math.round(p * revenu / 100))); }, [pct, revenu]);
+  const isEditingEur = React.useRef(false);
+
+  // Sync € display uniquement quand le slider/champ % change ET qu'on n'est pas en train de taper en €
+  useEffect(() => {
+    if (!isEditingEur.current) {
+      setEurInput(String(Math.round(p * revenu / 100)));
+    }
+  }, [pct, revenu]);
 
   function handlePct(raw) {
     const v = Math.min(maxP, Math.max(0, Number(raw)||0));
@@ -144,7 +201,7 @@ function PctRow({ emoji, label, pct, onChange, revenu, rest, editable }) {
   function handleEur(raw) {
     setEurInput(raw);
     if (!revenu) return;
-    onChange(String(Math.min(maxP, Math.round((Number(raw)||0) / revenu * 100))));
+    onChange(String(Math.min(maxP, Math.round(parseAmount(raw) / revenu * 100))));
   }
 
   return (
@@ -162,11 +219,11 @@ function PctRow({ emoji, label, pct, onChange, revenu, rest, editable }) {
           </div>
           {/* Champ € — éditable si prop editable, sinon lecture seule */}
           {editable && revenu > 0 ? (
-            <div style={{ display:'flex', alignItems:'center', background:'#FFFBEB', border:`1.5px solid ${eurFocus?'#F59E0B':'#FDE68A'}`, borderRadius:8, overflow:'hidden', minWidth:80 }}>
-              <input type="number" min="0" value={eurFocus ? eurInput : String(Math.round(p*revenu/100))}
+            <div style={{ display:'flex', alignItems:'center', background:'#FFFBEB', border:'1.5px solid #FDE68A', borderRadius:8, overflow:'hidden', minWidth:80 }}>
+              <input type="number" min="0" value={eurInput}
                 onChange={e => handleEur(e.target.value)}
-                onFocus={() => setEurFocus(true)}
-                onBlur={() => setEurFocus(false)}
+                onFocus={() => { isEditingEur.current = true; }}
+                onBlur={() => { isEditingEur.current = false; }}
                 style={{ width:60, padding:'6px 2px 6px 10px', border:'none', background:'transparent', fontSize:14, fontWeight:700, color:'#92400E', textAlign:'right' }}/>
               <span style={{ fontSize:13, color:'#D97706', paddingRight:8, paddingLeft:2 }}>€</span>
             </div>
@@ -177,22 +234,8 @@ function PctRow({ emoji, label, pct, onChange, revenu, rest, editable }) {
           )}
         </div>
       </div>
-      {/* Barre + slider */}
-      <div style={{ position:'relative', height:6, background:'#E5E7EB', borderRadius:6 }}>
-        {/* Zone grisée bloquée au-delà du max */}
-        {maxP < 100 && (
-          <div style={{ position:'absolute', left:`${maxP}%`, top:0, height:'100%', right:0,
-            background:'#D1D5DB', borderRadius:'0 6px 6px 0', transition:'left 0.2s' }}/>
-        )}
-        {/* Barre de progression */}
-        <div style={{ position:'absolute', left:0, top:0, height:'100%', width:`${Math.min(100,p)}%`,
-          background:'#1F3864', borderRadius:6, transition:'width 0.15s' }}/>
-        {/* Slider transparent par-dessus — max dynamique bloque le glissement */}
-        <input type="range" min="0" max={maxP} value={p}
-          onChange={e => handlePct(e.target.value)}
-          style={{ position:'absolute', width:'100%', top:'-4px', opacity:0,
-            cursor:'pointer', height:14, margin:0 }}/>
-      </div>
+      {/* Barre tactile — fonctionne souris ET touch mobile */}
+      <SliderBar p={p} maxP={maxP} onMove={handlePct} />
       {editable && revenu > 0 && (
         <p style={{ fontSize:10, color:'#D97706', marginTop:4 }}>💡 Tu peux saisir le montant en € directement dans le champ orange</p>
       )}
@@ -222,13 +265,27 @@ function AuthScreen({ onConnect }) {
 
   async function submit() {
     if (!email || !pwd) { setErr('Remplis tous les champs.'); return; }
+    if (pwd.length < 6) { setErr('Mot de passe : minimum 6 caractères.'); return; }
     setLoading(true); setErr('');
-    const fn = mode === 'login'
-      ? supabase.auth.signInWithPassword({ email, password: pwd })
-      : supabase.auth.signUp({ email, password: pwd });
-    const { data, error } = await fn;
-    setLoading(false);
-    if (error) setErr(error.message); else onConnect(data.user);
+    if (mode === 'login') {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pwd });
+      setLoading(false);
+      if (error) setErr(error.message === 'Invalid login credentials' ? 'Email ou mot de passe incorrect.' : error.message);
+      else onConnect(data.user);
+    } else {
+      const { data, error } = await supabase.auth.signUp({
+        email, password: pwd,
+        options: { emailRedirectTo: window.location.origin + window.location.pathname }
+      });
+      setLoading(false);
+      if (error) { setErr(error.message); return; }
+      // Si session nulle = confirmation email requise
+      if (!data.session) {
+        setMode('confirm');
+      } else {
+        onConnect(data.user);
+      }
+    }
   }
 
   async function sendReset() {
@@ -255,7 +312,7 @@ function AuthScreen({ onConnect }) {
 
   const wrap = (children) => (
     <div style={{ minHeight:'100vh', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, background:'linear-gradient(160deg,#1F3864 0%,#2E5FA3 100%)' }}>
-      <div className="pop" style={{ width:'100%', maxWidth:380 }}>
+      <div className="pop" className="auth-wrap" style={{ width:'100%', maxWidth:380 }}>
         <div style={{ textAlign:'center', marginBottom:32 }}>
           <div style={{ fontSize:52, marginBottom:8 }}>🏆</div>
           <h1 style={{ color:'white', fontSize:26, fontWeight:800 }}>Discipline Financière</h1>
@@ -281,6 +338,23 @@ function AuthScreen({ onConnect }) {
       <Btn onClick={updatePassword} disabled={loading} style={{ width:'100%' }} variant="gold">
         {loading ? '...' : 'Enregistrer le nouveau mot de passe'}
       </Btn>
+    </Card>
+  );
+
+  // Écran : confirme ton email (après inscription)
+  if (mode === 'confirm') return wrap(
+    <Card style={{ textAlign:'center' }}>
+      <div style={{ fontSize:48, marginBottom:12 }}>✉️</div>
+      <h2 style={{ fontSize:18, fontWeight:700, marginBottom:8 }}>Vérifie ta boîte mail !</h2>
+      <p style={{ fontSize:13, color:'#6B7280', marginBottom:20, lineHeight:1.6 }}>
+        Un email de confirmation t'a été envoyé à<br/>
+        <strong style={{ color:'#1F3864' }}>{email}</strong><br/><br/>
+        Clique sur le lien dans l'email pour activer ton compte, puis reviens ici pour te connecter.
+      </p>
+      <button onClick={() => { setMode('login'); setPwd(''); }}
+        style={{ background:'#1F3864', color:'white', border:'none', borderRadius:12, padding:'12px 24px', fontSize:14, fontWeight:700, cursor:'pointer', width:'100%' }}>
+        J'ai confirmé → Se connecter
+      </button>
     </Card>
   );
 
@@ -379,7 +453,7 @@ function ParamsScreen({ user, params, onSave, onBack, isOnboarding }) {
         </div>
       </div>
 
-      <div style={{ padding:'20px 16px', maxWidth:500, margin:'0 auto' }}>
+      <div style={{ padding:'20px 16px' }}>
         <Card style={{ marginBottom:16 }}>
           <h3 style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:14, textTransform:'uppercase', letterSpacing:'0.5px' }}>💰 Revenu mensuel net</h3>
           <InputField label="Montant" value={revenu} onChange={setRevenu} type="number" suffix="€"
@@ -462,7 +536,7 @@ function AddMonthScreen({ user, bilans, params, onSave, onBack }) {
           </div>
         </div>
       </div>
-      <div style={{ padding:'20px 16px', maxWidth:500, margin:'0 auto' }}>
+      <div style={{ padding:'20px 16px' }}>
         <Card style={{ marginBottom:16 }}>
           <h3 style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:14, textTransform:'uppercase', letterSpacing:'0.5px' }}>📋 Période</h3>
           <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:5, textTransform:'uppercase', letterSpacing:'0.5px' }}>Mois</label>
@@ -538,7 +612,7 @@ function DashboardScreen({ bilans, params, onAddMonth, onParams, onDeconnexion, 
         </div>
       </div>
 
-      <div style={{ padding:'0 16px', maxWidth:500, margin:'0 auto', marginTop:-52 }}>
+      <div style={{ padding:'0 16px', marginTop:-52 }}>
         {!last ? (
           <Card className="pop" style={{ textAlign:'center', padding:'40px 24px' }}>
             <div style={{ fontSize:52, marginBottom:12 }}>🚀</div>
@@ -685,7 +759,7 @@ function App() {
   if (!params) return <ParamsScreen user={user} params={null} onSave={p => { setParams(p); setScreen('dashboard'); }} isOnboarding={true}/>;
 
   return (
-    <div style={{ maxWidth:500, margin:'0 auto', position:'relative' }}>
+    <div className="app-shell" style={{ position:'relative' }}>
       {screen === 'dashboard' && (
         <DashboardScreen bilans={bilans} params={params}
           onAddMonth={() => setScreen('add')}
@@ -698,7 +772,7 @@ function App() {
 
       {/* Barre de navigation — Paramètres à droite, + au centre */}
       {screen === 'dashboard' && (
-        <div style={{ position:'fixed', bottom:0, left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:500,
+        <div style={{ position:'sticky', bottom:0, width:'100%',
           background:'white', borderTop:'1px solid #E5E7EB',
           padding:'10px 0 max(10px, env(safe-area-inset-bottom))',
           display:'flex', zIndex:100 }}>
