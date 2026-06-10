@@ -262,6 +262,90 @@ function GraphLine({data,color='#2563EB',label,format}){
   </div>);
 }
 
+
+const CATS_REVENUS=['Salaire','CAF','Pension alimentaire','Allocations','Loyers perçus','Auto-entrepreneur','Freelance','Retraite','Autre'];
+
+function RevenusEditor({revenus,onChange}){
+  const [showAdd,setShowAdd]=useState(false);
+  const [newCat,setNewCat]=useState('Salaire');const [newCatCustom,setNewCatCustom]=useState('');
+  const [newMontant,setNewMontant]=useState('');const [newNote,setNewNote]=useState('');
+  const [editIdx,setEditIdx]=useState(null);const [editMontant,setEditMontant]=useState('');const [editNote,setEditNote]=useState('');
+  const total=revenus.reduce((s,r)=>s+r.montant,0);
+  function add(){const m=parseAmount(newMontant);if(!m)return;const catLabel=newCat==='Autre'?(newCatCustom.trim()||'Autre'):newCat;onChange([...revenus,{cat:catLabel,montant:m,note:newNote.trim()}]);setNewMontant('');setNewCatCustom('');setNewNote('');setShowAdd(false);}
+  function remove(i){onChange(revenus.filter((_,idx)=>idx!==i));}
+  function startEdit(i){setEditIdx(i);setEditMontant(String(revenus[i].montant));setEditNote(revenus[i].note||'');}
+  function saveEdit(i){const m=parseAmount(editMontant);if(!m){setEditIdx(null);return;}const u=[...revenus];u[i]={...u[i],montant:m,note:editNote.trim()};onChange(u);setEditIdx(null);}
+  return(<div>
+    {revenus.map((r,i)=>(<div key={i} style={{background:'#F7F9FC',borderRadius:12,marginBottom:8,overflow:'hidden',border:'1px solid rgba(11,20,55,0.05)'}}>
+      {editIdx===i?(
+        <div style={{padding:'12px'}}>
+          <p style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:10}}>{r.cat}</p>
+          <div style={{display:'flex',gap:8,marginBottom:8}}>
+            <input type="number" value={editMontant} onChange={e=>setEditMontant(e.target.value)} autoFocus style={{flex:1,padding:'8px 10px',border:'1.5px solid #2563EB',borderRadius:10,fontSize:14,fontWeight:700,fontFamily:'inherit'}}/>
+            <span style={{display:'flex',alignItems:'center',fontSize:13,color:'#64748B'}}>€</span>
+          </div>
+          <input type="text" value={editNote} onChange={e=>setEditNote(e.target.value)} placeholder="Précision facultative…" maxLength={80}
+            style={{width:'100%',padding:'8px 10px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:13,marginBottom:8,fontFamily:'inherit'}} onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={()=>saveEdit(i)} style={{flex:1,background:'#0B1437',border:'none',color:'white',borderRadius:10,padding:'8px',cursor:'pointer',fontSize:13,fontWeight:700}}>✓ Enregistrer</button>
+            <button onClick={()=>setEditIdx(null)} style={{flex:1,background:'transparent',border:'1px solid #E5E7EB',color:'#64748B',borderRadius:10,padding:'8px',cursor:'pointer',fontSize:13}}>Annuler</button>
+          </div>
+        </div>
+      ):(
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 12px'}}>
+          <div><span style={{fontSize:13,color:'#1E293B',fontWeight:600}}>{r.cat}</span>{r.note&&<p style={{fontSize:11,color:'#94A3B8',marginTop:2}}>{r.note}</p>}</div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:13,fontWeight:700,color:'#10B981'}}>{fmt(r.montant)}</span>
+            <button onClick={()=>startEdit(i)} style={{background:'#F0FDF4',border:'none',color:'#10B981',borderRadius:7,padding:'4px 8px',cursor:'pointer',fontSize:11,fontWeight:700}}>Modifier</button>
+            <button onClick={()=>remove(i)} style={{background:'none',border:'none',color:'#D1D5DB',cursor:'pointer',fontSize:18,padding:'0 2px'}}>×</button>
+          </div>
+        </div>
+      )}
+    </div>))}
+    {revenus.length>0&&<div style={{display:'flex',justifyContent:'space-between',padding:'8px 12px',background:'#F0FDF4',borderRadius:12,marginBottom:12,border:'1px solid rgba(16,185,129,0.2)'}}>
+      <span style={{fontSize:13,fontWeight:600,color:'#065F46'}}>Total revenus</span>
+      <span style={{fontSize:13,fontWeight:700,color:'#10B981'}}>{fmt(total)}</span>
+    </div>}
+    {showAdd?(
+      <div style={{background:'#F7F9FC',border:'1.5px solid #E5E7EB',borderRadius:12,padding:'14px',marginBottom:8}}>
+        <p style={{fontSize:12,fontWeight:700,color:'#1E293B',marginBottom:10,textTransform:'uppercase',letterSpacing:'0.5px'}}>Nouvelle source de revenu</p>
+        <div style={{marginBottom:10}}>
+          <label style={{fontSize:11,fontWeight:600,color:'#64748B',display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.5px'}}>Catégorie</label>
+          <select value={newCat} onChange={e=>setNewCat(e.target.value)} style={{width:'100%',padding:'10px 12px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:14,background:'#FFFFFF',color:'#0F172A',fontFamily:'inherit'}}>
+            {CATS_REVENUS.map(c=><option key={c}>{c}</option>)}
+          </select>
+        </div>
+        {newCat==='Autre'&&<div style={{marginBottom:10}}>
+          <label style={{fontSize:11,fontWeight:600,color:'#64748B',display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.5px'}}>Nom de la source</label>
+          <input type="text" value={newCatCustom} onChange={e=>setNewCatCustom(e.target.value)} placeholder="Ex : Prime, Dividendes…"
+            style={{width:'100%',padding:'10px 12px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:14,fontFamily:'inherit'}} onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+        </div>}
+        <div style={{marginBottom:10}}>
+          <label style={{fontSize:11,fontWeight:600,color:'#64748B',display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.5px'}}>Montant mensuel</label>
+          <div style={{position:'relative'}}>
+            <input type="number" value={newMontant} onChange={e=>setNewMontant(e.target.value)} placeholder="0"
+              style={{width:'100%',padding:'10px 44px 10px 12px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:14,fontFamily:'inherit'}} onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+            <span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',color:'#94A3B8',fontSize:14}}>€</span>
+          </div>
+        </div>
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:11,fontWeight:600,color:'#64748B',display:'block',marginBottom:4,textTransform:'uppercase',letterSpacing:'0.5px'}}>Précision (facultatif)</label>
+          <input type="text" value={newNote} onChange={e=>setNewNote(e.target.value)} placeholder="Ex : Net après impôts…" maxLength={80}
+            style={{width:'100%',padding:'10px 12px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:14,fontFamily:'inherit'}} onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={add} style={{flex:1,background:'linear-gradient(135deg,#10B981,#059669)',border:'none',color:'white',borderRadius:10,padding:'10px',cursor:'pointer',fontSize:14,fontWeight:700}}>✓ Ajouter</button>
+          <button onClick={()=>{setShowAdd(false);setNewMontant('');setNewCatCustom('');setNewNote('');}} style={{flex:1,background:'transparent',border:'1px solid #E5E7EB',color:'#64748B',borderRadius:10,padding:'10px',cursor:'pointer',fontSize:14}}>Annuler</button>
+        </div>
+      </div>
+    ):(
+      <button onClick={()=>setShowAdd(true)} style={{width:'100%',padding:'10px',border:'2px dashed #D1FAE5',borderRadius:12,background:'transparent',color:'#10B981',fontSize:13,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+        <span style={{fontSize:18}}>+</span> Ajouter une source de revenu
+      </button>
+    )}
+  </div>);
+}
+
 const CATS_CHARGES=['Loyer','Énergie','Eau','Internet','Téléphone','Assurance','Crédit','Transport','Abonnements','Autre'];
 function ChargesEditor({charges,onChange,revenu}){
   const [showAdd,setShowAdd]=useState(false);
@@ -434,7 +518,7 @@ function OnboardingFlow({user,onSave}){
   const [objInvM,setObjInvM]=useState('');const [objInvA,setObjInvA]=useState('15');
   const [objEpM,setObjEpM]=useState('');const [objEpA,setObjEpA]=useState('15');
   const [saving,setSaving]=useState(false);
-  const rev=Number(revenu)||0;
+  const rev=revenus.reduce((s,r)=>s+r.montant,0);
   const totalC=charges.reduce((s,c)=>s+c.montant,0);
   const pC=rev>0?Math.round(totalC/rev*100):0;
   const reste=100-pC-(Number(pPlaisir)||0)-(Number(pEpargne)||0)-(Number(pInvest)||0);
@@ -496,9 +580,80 @@ function OnboardingFlow({user,onSave}){
   </div>);
 }
 
+
+function FeedbackBlock({userId}){
+  const [open,setOpen]=React.useState(false);
+  const [msg,setMsg]=React.useState('');
+  const [type,setType]=React.useState('suggestion');
+  const [sent,setSent]=React.useState(false);
+  const [sending,setSending]=React.useState(false);
+
+  async function sendFeedback(){
+    if(!msg.trim()) return;
+    setSending(true);
+    await supabase.from('feedbacks').insert({
+      user_id: userId||null,
+      type,
+      message: msg.trim(),
+      created_at: new Date().toISOString()
+    });
+    setSending(false);
+    setSent(true);
+    setMsg('');
+    setTimeout(()=>{setSent(false);setOpen(false);},3000);
+  }
+
+  return(
+    <div style={{background:'#FFFFFF',borderRadius:14,border:'1.5px solid #E5E7EB',overflow:'hidden'}}>
+      <button onClick={()=>setOpen(!open)}
+        style={{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'14px 18px',
+          background:'none',border:'none',cursor:'pointer',textAlign:'left'}}>
+        <span style={{fontSize:22}}>💬</span>
+        <div style={{flex:1}}>
+          <p style={{fontWeight:700,fontSize:14,color:'#0F172A',margin:0}}>Donner mon avis</p>
+          <p style={{fontSize:11,color:'#94A3B8',margin:0,marginTop:2}}>Bugs, idées, suggestions — tout compte !</p>
+        </div>
+        <span style={{color:'#94A3B8',fontSize:16,transform:open?'rotate(90deg)':'rotate(0deg)',transition:'transform 0.2s'}}>›</span>
+      </button>
+
+      {open&&<div className="fade-in" style={{padding:'0 18px 18px'}}>
+        {sent
+          ? <div style={{textAlign:'center',padding:'16px 0'}}>
+              <p style={{fontSize:22,marginBottom:6}}>🎉</p>
+              <p style={{fontWeight:700,color:'#10B981',fontSize:14}}>Merci pour ton retour !</p>
+            </div>
+          : <>
+              <div style={{display:'flex',gap:8,marginBottom:12}}>
+                {[['suggestion','💡 Idée'],['bug','🐛 Bug'],['autre','💬 Autre']].map(([k,l])=>(
+                  <button key={k} onClick={()=>setType(k)}
+                    style={{flex:1,padding:'7px 4px',borderRadius:10,border:`1.5px solid ${type===k?'#2563EB':'#E5E7EB'}`,
+                      background:type===k?'#EFF6FF':'#F8FAFC',color:type===k?'#2563EB':'#64748B',
+                      fontSize:11,fontWeight:700,cursor:'pointer',transition:'all 0.15s'}}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              <textarea value={msg} onChange={e=>setMsg(e.target.value)}
+                placeholder="Dis-moi ce qui peut être amélioré..."
+                rows={3}
+                style={{width:'100%',padding:'11px 14px',border:'1.5px solid #E5E7EB',borderRadius:10,
+                  fontSize:14,color:'#0F172A',background:'#F8FAFC',resize:'vertical',
+                  fontFamily:'inherit',marginBottom:10,transition:'border-color 0.15s'}}
+                onFocus={e=>e.target.style.borderColor='#2563EB'}
+                onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+              <Btn onClick={sendFeedback} disabled={!msg.trim()||sending} style={{width:'100%'}} variant="primary">
+                {sending?'Envoi…':'Envoyer 🚀'}
+              </Btn>
+            </>
+        }
+      </div>}
+    </div>
+  );
+}
+
 function ParamsScreen({user,params,onSave,onBack}){
   const toP=(m,r)=>r>0?String(Math.round((m||0)/r*100)):'';
-  const [revenu,setRevenu]=useState(String(params?.revenu||''));
+  const [revenus,setRevenus]=useState(parseCharges(params?.revenus_detail));
   const [charges,setCharges]=useState(parseCharges(params?.charges_detail));
   const [pPlaisir,setPPlaisir]=useState(toP(params?.objectif_plaisir,params?.revenu)||'');
   const [pEpargne,setPEpargne]=useState(toP(params?.objectif_epargne,params?.revenu)||'');
@@ -511,7 +666,7 @@ function ParamsScreen({user,params,onSave,onBack}){
   const [tab,setTab]=useState('budget');
   const [showModal,setShowModal]=useState(false);
 
-  const rev=Number(revenu)||0;
+  const rev=revenus.reduce((s,r)=>s+r.montant,0);
   const totalC=charges.reduce((s,c)=>s+c.montant,0);
   const pC=rev>0?Math.round(totalC/rev*100):0;
   const reste=100-pC-(Number(pPlaisir)||0)-(Number(pEpargne)||0)-(Number(pInvest)||0);
@@ -519,7 +674,7 @@ function ParamsScreen({user,params,onSave,onBack}){
   // update() garantit la mise à jour de la ligne existante
   async function save(applyToHistory){
     setSaving(true);
-    const data={revenu:rev,objectif_charges:totalC,objectif_plaisir:Math.round((Number(pPlaisir)||0)*rev/100),charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15};
+    const data={revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:Math.round((Number(pPlaisir)||0)*rev/100),charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15};
     if(applyToHistory){
       data.objectif_epargne=Math.round((Number(pEpargne)||0)*rev/100);
       data.objectif_investissement=Math.round((Number(pInvest)||0)*rev/100);
@@ -545,9 +700,12 @@ function ParamsScreen({user,params,onSave,onBack}){
     </div>}
 
     <div style={{background:'#0B1437',padding:'20px 20px 0',position:'sticky',top:0,zIndex:10}}>
-      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
-        <button onClick={onBack} style={{background:'rgba(255,255,255,0.15)',border:'none',color:'white',borderRadius:10,padding:'6px 10px',cursor:'pointer',fontSize:16}}>←</button>
-        <div style={{display:'flex',alignItems:'center',gap:10}}><img src={LOGO_ICON_SRC} alt='' style={{height:28,borderRadius:'50%',opacity:0.95}}/><h1 style={{color:'white',fontSize:18,fontWeight:700}}>⚙️ Paramètres</h1></div>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <button onClick={onBack} style={{background:'rgba(255,255,255,0.15)',border:'none',color:'white',borderRadius:10,padding:'6px 10px',cursor:'pointer',fontSize:16}}>←</button>
+          <h1 style={{color:'white',fontSize:18,fontWeight:700}}>⚙️ Paramètres</h1>
+        </div>
+        <img src={LOGO_ICON_SRC} alt='' style={{height:32,borderRadius:'50%',opacity:0.95}}/>
       </div>
       <div style={{display:'flex',gap:8,paddingBottom:12}}>
         {[['budget','💰 Budget'],['objectif','🎯 Objectifs']].map(([k,l])=><button key={k} onClick={()=>setTab(k)} style={{padding:'7px 16px',borderRadius:20,border:'none',cursor:'pointer',fontSize:13,fontWeight:600,background:tab===k?'white':'rgba(255,255,255,0.15)',color:tab===k?'#0B1437':'white',transition:'all 0.2s'}}>{l}</button>)}
@@ -555,7 +713,7 @@ function ParamsScreen({user,params,onSave,onBack}){
     </div>
     <div style={{padding:'20px 16px'}}>
       {tab==='budget'&&<>
-        <Card style={{marginBottom:14}}><h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:14,textTransform:'uppercase',letterSpacing:'0.5px'}}>💰 Revenu mensuel</h3><InputField label="Revenu net" value={revenu} onChange={setRevenu} type="number" suffix="€"/></Card>
+        <Card style={{marginBottom:14}}><h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:14,textTransform:'uppercase',letterSpacing:'0.5px'}}>💰 Revenus mensuels</h3><RevenusEditor revenus={revenus} onChange={setRevenus}/></Card>
         <Card style={{marginBottom:14}}><h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:14,textTransform:'uppercase',letterSpacing:'0.5px'}}>🏠 Charges fixes</h3><ChargesEditor charges={charges} onChange={setCharges} revenu={rev}/></Card>
         <Card style={{marginBottom:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
@@ -578,7 +736,27 @@ function ParamsScreen({user,params,onSave,onBack}){
         <ObjectifForm emoji="🏦" label="Objectif épargne" montant={objEpM} setMontant={setObjEpM} annees={objEpA} setAnnees={setObjEpA} note="Montant d'épargne de précaution à atteindre"/>
       </Card>}
       {reste<0&&tab==='budget'&&<div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'12px 16px',marginBottom:14}}><p style={{color:'#B91C1C',fontSize:13}}>⚠️ Total dépasse 100%. Réduis un poste.</p></div>}
-      <Btn onClick={()=>setShowModal(true)} disabled={saving||(tab==='budget'&&reste<0)||!revenu} style={{width:'100%'}} variant="gold">{saving?'...':'✅ Enregistrer'}</Btn>
+      <Btn onClick={()=>setShowModal(true)} disabled={saving||(tab==='budget'&&reste<0)||rev===0} style={{width:'100%'}} variant="gold">{saving?'...':'✅ Enregistrer'}</Btn>
+
+      {/* ─── Soutien & Feedback ─── */}
+      <div style={{marginTop:24,display:'flex',flexDirection:'column',gap:10}}>
+
+        {/* Tipeee */}
+        <a href="https://fr.tipeee.com/orizcore1/" target="_blank" rel="noopener noreferrer"
+          style={{display:'flex',alignItems:'center',gap:12,padding:'14px 18px',
+            background:'linear-gradient(135deg,#D4A017,#b8860b)',borderRadius:14,
+            textDecoration:'none',boxShadow:'0 4px 14px rgba(212,160,23,0.35)'}}>
+          <span style={{fontSize:22}}>🤝</span>
+          <div>
+            <p style={{color:'white',fontWeight:700,fontSize:14,margin:0}}>Soutenir Orizcore</p>
+          </div>
+          <span style={{marginLeft:'auto',color:'rgba(255,255,255,0.7)',fontSize:18}}>→</span>
+        </a>
+
+        {/* Feedback */}
+        <FeedbackBlock userId={user?.id}/>
+
+      </div>
     </div>
   </div>);
 }
@@ -624,8 +802,16 @@ function AddMonthScreen({user,bilans,params,onSave,onBack}){
   return(<div style={{minHeight:'100vh',background:'#F0F3FA',paddingBottom:40}}>
     <div style={{background:'#0B1437',padding:'20px 20px 28px',position:'sticky',top:0,zIndex:10}}>
       <div style={{display:'flex',alignItems:'center',gap:12}}>
-        <button onClick={onBack} style={{background:'rgba(255,255,255,0.15)',border:'none',color:'white',borderRadius:10,padding:'6px 10px',cursor:'pointer',fontSize:16}}>←</button>
-        <div><div style={{display:'flex',alignItems:'center',gap:10}}><img src={LOGO_SRC} alt='' style={{height:24,opacity:0.9}}/><h1 style={{color:'white',fontSize:18,fontWeight:700}}>📅 Bilan du mois</h1></div><p style={{color:'rgba(255,255,255,0.6)',fontSize:12,marginTop:2}}>Renseigne tes soldes actuels</p></div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',width:'100%'}}>
+          <div style={{display:'flex',alignItems:'center',gap:12}}>
+            <button onClick={onBack} style={{background:'rgba(255,255,255,0.15)',border:'none',color:'white',borderRadius:10,padding:'6px 10px',cursor:'pointer',fontSize:16}}>←</button>
+            <div>
+              <h1 style={{color:'white',fontSize:18,fontWeight:700}}>📅 Bilan du mois</h1>
+              <p style={{color:'rgba(255,255,255,0.6)',fontSize:12,marginTop:2}}>Renseigne tes soldes actuels</p>
+            </div>
+          </div>
+          <img src={LOGO_ICON_SRC} alt='' style={{height:32,borderRadius:'50%',opacity:0.95}}/>
+        </div>
       </div>
     </div>
     <div style={{padding:'20px 16px'}}>
