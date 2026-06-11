@@ -519,7 +519,7 @@ function BadgesSection({bilans,params}){
 
 function OnboardingFlow({user,onSave}){
   const [step,setStep]=useState(1);
-  const [revenu,setRevenu]=useState('');const [charges,setCharges]=useState([]);
+  const [revenus,setRevenus]=useState([]);const [charges,setCharges]=useState([]);
   const [pPlaisir,setPPlaisir]=useState('');const [pEpargne,setPEpargne]=useState('');const [pInvest,setPInvest]=useState('');
   const [objInvM,setObjInvM]=useState('');const [objInvA,setObjInvA]=useState('15');
   const [objEpM,setObjEpM]=useState('');const [objEpA,setObjEpA]=useState('15');
@@ -530,7 +530,7 @@ function OnboardingFlow({user,onSave}){
   const reste=100-pC-(Number(pPlaisir)||0)-(Number(pEpargne)||0)-(Number(pInvest)||0);
   async function finish(){
     setSaving(true);
-    await supabase.from('params').upsert({user_id:user.id,revenu:rev,objectif_charges:totalC,objectif_plaisir:Math.round((Number(pPlaisir)||0)*rev/100),objectif_epargne:Math.round((Number(pEpargne)||0)*rev/100),objectif_investissement:Math.round((Number(pInvest)||0)*rev/100),charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15});
+    await supabase.from('params').upsert({user_id:user.id,revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:Math.round((Number(pPlaisir)||0)*rev/100),objectif_epargne:Math.round((Number(pEpargne)||0)*rev/100),objectif_investissement:Math.round((Number(pInvest)||0)*rev/100),charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15});
     const{data}=await supabase.from('params').select().eq('user_id',user.id).single();
     setSaving(false);onSave(data);
   }
@@ -545,8 +545,8 @@ function OnboardingFlow({user,onSave}){
   }
   if(step===1) return(<div style={{minHeight:'100vh',background:'#F0F3FA',paddingBottom:40}}><Header title="Étape 1 — Ton revenu" sub="La base de ton plan financier"/>
     <div style={{padding:'24px 16px'}}>
-      <Card style={{marginBottom:16}}><div style={{textAlign:'center',marginBottom:20}}><div style={{fontSize:40,marginBottom:8}}>💰</div><h2 style={{fontSize:17,fontWeight:700,marginBottom:6}}>Quel est ton revenu mensuel net ?</h2><p style={{fontSize:13,color:'#64748B',lineHeight:1.6}}>Ton salaire net après impôts.</p></div><InputField label="Revenu mensuel net" value={revenu} onChange={setRevenu} type="number" suffix="€"/></Card>
-      <Btn onClick={()=>setStep(2)} disabled={!revenu||rev<=0} style={{width:'100%'}} variant="gold">Suivant →</Btn>
+      <Card style={{marginBottom:16}}><div style={{textAlign:'center',marginBottom:20}}><div style={{fontSize:40,marginBottom:8}}>💰</div><h2 style={{fontSize:17,fontWeight:700,marginBottom:6}}>Quel est ton revenu mensuel net ?</h2><p style={{fontSize:13,color:'#64748B',lineHeight:1.6}}>Ton salaire net après impôts.</p></div><RevenusEditor revenus={revenus} onChange={setRevenus}/></Card>
+      <Btn onClick={()=>setStep(2)} disabled={rev<=0} style={{width:'100%'}} variant="gold">Suivant →</Btn>
     </div>
   </div>);
   if(step===2) return(<div style={{minHeight:'100vh',background:'#F0F3FA',paddingBottom:40}}><Header title="Étape 2 — Charges fixes" sub="Loyer, énergie, abonnements…" onBack={()=>setStep(1)}/>
@@ -586,6 +586,57 @@ function OnboardingFlow({user,onSave}){
   </div>);
 }
 
+
+
+function TutorialOverlay({onDone}){
+  const [step,setStep]=React.useState(0);
+  const slides=[
+    {emoji:"👋",title:"Bienvenue sur Orizcore !",text:"L'app qui t'aide à prendre le contrôle de tes finances et à construire une vraie discipline financière, mois après mois."},
+    {emoji:"⚙️",title:"Configure tes paramètres",text:"Dans Paramètres, renseigne tes revenus et tes charges fixes. Orizcore calcule automatiquement ta répartition idéale (épargne, plaisir, investissement)."},
+    {emoji:"📅",title:"Renseigne un bilan mensuel",text:"Chaque mois, appuie sur + et entre tes soldes réels : épargne, investissements, dépenses plaisir. Rapide, 2 minutes max."},
+    {emoji:"🏆",title:"Suis ton score de discipline",text:"Orizcore compare tes objectifs à ta réalité et génère ton score de discipline financière. Plus tu es régulier, plus ton score monte !"},
+    {emoji:"🚀",title:"Tu es prêt !",text:"Commence par configurer tes revenus dans Paramètres, puis renseigne ton premier bilan du mois. Bonne discipline ! 💪"},
+  ];
+  const s=slides[step];
+  const isLast=step===slides.length-1;
+
+  return(
+    <div style={{position:'fixed',inset:0,zIndex:999,background:'rgba(11,20,55,0.85)',display:'flex',alignItems:'flex-end',justifyContent:'center',backdropFilter:'blur(4px)'}}>
+      <div className="slide-up" style={{width:'100%',maxWidth:480,background:'#FFFFFF',borderRadius:'24px 24px 0 0',padding:'32px 24px 40px',boxShadow:'0 -8px 40px rgba(0,0,0,0.2)'}}>
+
+        {/* Indicateurs d'étapes */}
+        <div style={{display:'flex',justifyContent:'center',gap:6,marginBottom:28}}>
+          {slides.map((_,i)=>(
+            <div key={i} style={{width:i===step?24:8,height:8,borderRadius:4,
+              background:i===step?'#2563EB':i<step?'#93C5FD':'#E5E7EB',
+              transition:'all 0.3s ease'}}/>
+          ))}
+        </div>
+
+        {/* Contenu */}
+        <div className="fade-in" key={step} style={{textAlign:'center',marginBottom:32}}>
+          <div style={{fontSize:52,marginBottom:16}}>{s.emoji}</div>
+          <h2 style={{fontSize:20,fontWeight:800,color:'#0B1437',marginBottom:12,lineHeight:1.3}}>{s.title}</h2>
+          <p style={{fontSize:15,color:'#64748B',lineHeight:1.7}}>{s.text}</p>
+        </div>
+
+        {/* Boutons */}
+        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+          <Btn onClick={isLast?onDone:()=>setStep(step+1)} style={{width:'100%'}} variant="primary">
+            {isLast?'Commencer 🚀':'Suivant →'}
+          </Btn>
+          {!isLast&&(
+            <button onClick={onDone} style={{background:'none',border:'none',color:'#94A3B8',
+              fontSize:13,cursor:'pointer',padding:'4px'}}>
+              Passer le tutoriel
+            </button>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+}
 
 function FeedbackBlock({userId}){
   const [open,setOpen]=React.useState(false);
@@ -775,8 +826,10 @@ function AuthScreen({onConnect}){
   async function submit(){
     if(!email||!pwd){setErr('Remplis tous les champs.');return;}if(pwd.length<6){setErr('Minimum 6 caractères.');return;}
     setLoading(true);setErr('');
-    if(mode==='login'){const{data,error}=await supabase.auth.signInWithPassword({email,password:pwd});setLoading(false);if(error)setErr(error.message==='Invalid login credentials'?'Email ou mot de passe incorrect.':error.message);else onConnect(data.user);}
-    else{const{data,error}=await supabase.auth.signUp({email,password:pwd,options:{emailRedirectTo:window.location.origin+window.location.pathname}});setLoading(false);if(error){setErr(error.message);return;}if(!data.session)setMode('confirm');else onConnect(data.user);}
+    if(mode==='login'){const{data,error}=await supabase.auth.signInWithPassword({email,password:pwd});setLoading(false);if(error){setErr(error.message==='Invalid login credentials'?'Email ou mot de passe incorrect.':error.message);}
+      // onAuthStateChange dans App() prend le relais — pas besoin d'appeler onConnect ici
+    }
+    else{const{data,error}=await supabase.auth.signUp({email,password:pwd,options:{emailRedirectTo:window.location.origin+window.location.pathname}});setLoading(false);if(error){setErr(error.message);return;}if(!data.session||!data.user?.email_confirmed_at)setMode('confirm');else onConnect(data.user);}
   }
   async function sendReset(){if(!email){setErr("Entre ton email.");return;}setLoading(true);setErr('');const{error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+window.location.pathname});setLoading(false);if(error)setErr(error.message);else setMode('sent');}
   async function updatePassword(){if(!newPwd||!confirm){setErr('Remplis les deux champs.');return;}if(newPwd!==confirm){setErr('Les mots de passe ne correspondent pas.');return;}if(newPwd.length<6){setErr('Minimum 6 caractères.');return;}setLoading(true);setErr('');const{error}=await supabase.auth.updateUser({password:newPwd});setLoading(false);if(error)setErr(error.message);else{setMsg('Mot de passe modifié !');setTimeout(()=>setMode('login'),2000);}}
@@ -932,7 +985,35 @@ function DashboardScreen({bilans,params,onAddMonth,onDeconnexion,onUpdateBilan})
 function App(){
   const [user,setUser]=useState(null);const [params,setParams]=useState(null);const [bilans,setBilans]=useState([]);
   const [screen,setScreen]=useState('dashboard');const [loading,setLoading]=useState(true);
-  useEffect(()=>{(async()=>{const{data}=await supabase.auth.getSession();if(data.session?.user){setUser(data.session.user);await loadData(data.session.user.id);}setLoading(false);})();},[]);
+  const [showTutorial,setShowTutorial]=useState(false);
+  useEffect(()=>{
+    // 1. Vérifier la session existante au démarrage
+    (async()=>{
+      const{data}=await supabase.auth.getSession();
+      if(data.session?.user&&data.session.user.email_confirmed_at){setUser(data.session.user);await loadData(data.session.user.id);}
+      setLoading(false);
+    })();
+    // 2. Écouter tous les changements d'auth (crucial pour iOS PWA)
+    const{data:{subscription}}=supabase.auth.onAuthStateChange(async(event,session)=>{
+      if(event==='SIGNED_IN'&&session?.user){
+        // Bloquer si email non confirmé
+        if(!session.user.email_confirmed_at){
+          await supabase.auth.signOut();
+          return;
+        }
+        setUser(session.user);
+        await loadData(session.user.id);
+        setLoading(false);
+      }
+      if(event==='SIGNED_OUT'){
+        setUser(null);setParams(null);setBilans([]);setScreen('dashboard');
+      }
+      if(event==='PASSWORD_RECOVERY'){
+        // laisser le flow de reset gérer ça
+      }
+    });
+    return()=>subscription.unsubscribe();
+  },[]);
   async function loadData(uid){const{data:p}=await supabase.from('params').select().eq('user_id',uid).single();setParams(p);const{data:b}=await supabase.from('bilans').select().eq('user_id',uid).order('mois');setBilans(b||[]);}
   async function handleConnect(u){setUser(u);await loadData(u.id);}
   async function handleDeconnexion(){await supabase.auth.signOut();setUser(null);setParams(null);setBilans([]);setScreen('dashboard');}
@@ -946,8 +1027,9 @@ function App(){
   </div>
 );
   if(!user) return <AuthScreen onConnect={handleConnect}/>;
-  if(!params) return <OnboardingFlow user={user} onSave={p=>{setParams(p);setScreen('dashboard');}}/>;
+  if(!params) return <OnboardingFlow user={user} onSave={p=>{setParams(p);setScreen('dashboard');setShowTutorial(true);}}/>;
   return(<div className="app-shell" style={{position:'relative'}}>
+    {showTutorial&&<TutorialOverlay onDone={()=>setShowTutorial(false)}/>}
     {screen==='dashboard'&&<DashboardScreen bilans={bilans} params={params} onAddMonth={()=>setScreen('add')} onDeconnexion={handleDeconnexion} onUpdateBilan={()=>loadData(user.id)}/>}
     {screen==='add'&&<AddMonthScreen user={user} bilans={bilans} params={params} onSave={async()=>{await loadData(user.id);setScreen('dashboard');}} onBack={()=>setScreen('dashboard')}/>}
     {screen==='params'&&<ParamsScreen user={user} params={params} onSave={p=>{setParams(p);setScreen('dashboard');}} onBack={()=>setScreen('dashboard')}/>}
