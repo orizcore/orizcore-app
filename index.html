@@ -826,8 +826,12 @@ function AuthScreen({onConnect}){
   async function submit(){
     if(!email||!pwd){setErr('Remplis tous les champs.');return;}if(pwd.length<6){setErr('Minimum 6 caractères.');return;}
     setLoading(true);setErr('');
-    if(mode==='login'){const{data,error}=await supabase.auth.signInWithPassword({email,password:pwd});setLoading(false);if(error){setErr(error.message==='Invalid login credentials'?'Email ou mot de passe incorrect.':error.message);}
-      // onAuthStateChange dans App() prend le relais — pas besoin d'appeler onConnect ici
+    if(mode==='login'){const{data,error}=await supabase.auth.signInWithPassword({email,password:pwd});setLoading(false);if(error){setErr(error.message==='Invalid login credentials'?'Email ou mot de passe incorrect.':error.message);return;}
+      // Appel direct indispensable sur iOS PWA (onAuthStateChange pas toujours fiable)
+      if(data?.user){
+        if(!data.user.email_confirmed_at){setErr("Confirme ton adresse email avant de te connecter.");await supabase.auth.signOut();return;}
+        onConnect(data.user);
+      }
     }
     else{const{data,error}=await supabase.auth.signUp({email,password:pwd,options:{emailRedirectTo:window.location.origin+window.location.pathname}});setLoading(false);if(error){setErr(error.message);return;}if(!data.session||!data.user?.email_confirmed_at)setMode('confirm');else onConnect(data.user);}
   }
@@ -1001,8 +1005,13 @@ function App(){
           await supabase.auth.signOut();
           return;
         }
-        setUser(session.user);
-        await loadData(session.user.id);
+        // Utilisé principalement pour la restauration de session (app reopen)
+        // Le login direct passe par onConnect() ci-dessus
+        setUser(prev=>{
+          if(prev?.id===session.user.id) return prev; // déjà chargé, ne pas recharger
+          loadData(session.user.id);
+          return session.user;
+        });
         setLoading(false);
       }
       if(event==='SIGNED_OUT'){
@@ -1015,7 +1024,12 @@ function App(){
     return()=>subscription.unsubscribe();
   },[]);
   async function loadData(uid){const{data:p}=await supabase.from('params').select().eq('user_id',uid).single();setParams(p);const{data:b}=await supabase.from('bilans').select().eq('user_id',uid).order('mois');setBilans(b||[]);}
-  async function handleConnect(u){setUser(u);await loadData(u.id);}
+  async function handleConnect(u){
+    if(!u) return;
+    setUser(u);
+    await loadData(u.id);
+    setLoading(false);
+  }
   async function handleDeconnexion(){await supabase.auth.signOut();setUser(null);setParams(null);setBilans([]);setScreen('dashboard');}
   if(loading) return(
   <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',
