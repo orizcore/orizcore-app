@@ -210,13 +210,13 @@ function SliderBar({p,maxP,onMove}){
   </div>);
 }
 
-function PctRow({emoji,label,pct,onChange,revenu,rest,editable,locked}){
+function PctRow({emoji,label,pct,onChange,revenu,rest,editable,locked,exactAmount}){
   const p=Number(pct)||0;
-  // rest = reste global — quand total=100%, rest=0, maxP=p → bloqué
   const maxP=locked?p:Math.min(100,p+Math.max(0,rest));
-  const [eurInput,setEurInput]=useState(String(Math.round(p*revenu/100)||''));
+  const displayAmt=()=>exactAmount!==undefined?exactAmount:Math.round(p*revenu/100);
+  const [eurInput,setEurInput]=useState(String(displayAmt()||''));
   const isEditingEur=useRef(false);
-  useEffect(()=>{if(!isEditingEur.current)setEurInput(String(Math.round(p*revenu/100)));},[pct,revenu]);
+  useEffect(()=>{if(!isEditingEur.current)setEurInput(String(displayAmt()));},[pct,revenu,exactAmount]);
   function handlePct(raw){if(!locked)onChange(String(Math.min(maxP,Math.max(0,Number(raw)||0))));}
   function handleEur(raw){setEurInput(raw);if(!revenu||locked)return;onChange(String(Math.min(maxP,Math.round(parseAmount(raw)/revenu*100))));}
   return(<div style={{marginBottom:16}}>
@@ -224,7 +224,7 @@ function PctRow({emoji,label,pct,onChange,revenu,rest,editable,locked}){
       <span style={{fontSize:13,fontWeight:600,color:locked?'#9CA3AF':'#374151'}}>{emoji} {label}{locked&&' 🔒'}</span>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
         <div style={{display:'flex',alignItems:'center',background:locked?'#F3F4F6':'#F9FAFB',border:'1.5px solid #E5E7EB',borderRadius:10,overflow:'hidden'}}>
-          <input type="number" min="0" max={maxP} value={pct} onChange={e=>handlePct(e.target.value)} disabled={locked} style={{width:48,padding:'6px 4px 6px 10px',border:'none',background:'transparent',fontSize:14,fontWeight:700,color:locked?'#9CA3AF':'#0B1437',textAlign:'right'}}/>
+          <input type="number" min="0" max={maxP} value={Math.round(p)} onChange={e=>handlePct(e.target.value)} disabled={locked} style={{width:48,padding:'6px 4px 6px 10px',border:'none',background:'transparent',fontSize:14,fontWeight:700,color:locked?'#9CA3AF':'#0B1437',textAlign:'right'}}/>
           <span style={{fontSize:13,color:'#94A3B8',paddingRight:8,paddingLeft:2}}>%</span>
         </div>
         {editable&&revenu>0?(
@@ -530,7 +530,7 @@ function OnboardingFlow({user,onSave}){
   const reste=100-pC-(Number(pPlaisir)||0)-(Number(pEpargne)||0)-(Number(pInvest)||0);
   async function finish(){
     setSaving(true);
-    await supabase.from('params').upsert({user_id:user.id,revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:Math.round((Number(pPlaisir)||0)*rev/100),objectif_epargne:Math.round((Number(pEpargne)||0)*rev/100),objectif_investissement:Math.round((Number(pInvest)||0)*rev/100),charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15});
+    await supabase.from('params').upsert({user_id:user.id,revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:mPlaisir,objectif_epargne:mEpargne,objectif_investissement:mInvest,charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15});
     const{data}=await supabase.from('params').select().eq('user_id',user.id).single();
     setSaving(false);onSave(data);
   }
@@ -562,9 +562,9 @@ function OnboardingFlow({user,onSave}){
       <Card style={{marginBottom:12}}>
         <div style={{textAlign:'center',marginBottom:16}}><div style={{fontSize:36,marginBottom:8}}>🎯</div><p style={{fontSize:13,color:'#64748B'}}>Charges : <strong>{pC}%</strong>. Reste : <strong style={{color:'#10B981'}}>{100-pC}%</strong></p></div>
         <PctRow emoji="🏠" label="Charges fixes (verrouillé)" pct={pC} onChange={()=>{}} revenu={rev} rest={0} locked={true}/>
-        <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={setPPlaisir} revenu={rev} rest={reste} editable={true}/>
-        <PctRow emoji="🏦" label="Épargne / mois" pct={pEpargne} onChange={setPEpargne} revenu={rev} rest={reste} editable={true}/>
-        <PctRow emoji="📈" label="Investissement / mois" pct={pInvest} onChange={setPInvest} revenu={rev} rest={reste} editable={true}/>
+        <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={pct=>setMPlaisir(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mPlaisir}/>
+        <PctRow emoji="🏦" label="Épargne / mois" pct={pEpargne} onChange={pct=>setMEpargne(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mEpargne}/>
+        <PctRow emoji="📈" label="Investissement / mois" pct={pInvest} onChange={pct=>setMInvest(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mInvest}/>
         <div style={{display:'flex',justifyContent:'space-between',padding:'10px 14px',background:reste<0?'#FEF2F2':'#F9FAFB',borderRadius:12,marginTop:4,border:`1px solid ${reste<0?'#FECACA':'#E5E7EB'}`}}>
           <span style={{fontSize:13,fontWeight:600,color:'#1E293B'}}>{reste<0?'⚠️ Dépassement':reste===0?'✅ Tout alloué':'⬜ Non alloué'}</span>
           <span style={{fontSize:13,fontWeight:700,color:reste<0?'#B91C1C':reste===0?'#10B981':'#F59E0B'}}>{reste>=0?`${reste}%`:`+${-reste}%`} {rev>0&&`(${fmt(Math.abs(Math.round(reste*rev/100)))})`}</span>
@@ -712,9 +712,9 @@ function ParamsScreen({user,params,onSave,onBack}){
   const toP=(m,r)=>r>0?String(Math.round((m||0)/r*100)):'';
   const [revenus,setRevenus]=useState(parseCharges(params?.revenus_detail));
   const [charges,setCharges]=useState(parseCharges(params?.charges_detail));
-  const [pPlaisir,setPPlaisir]=useState(toP(params?.objectif_plaisir,params?.revenu)||'');
-  const [pEpargne,setPEpargne]=useState(toP(params?.objectif_epargne,params?.revenu)||'');
-  const [pInvest,setPInvest]=useState(toP(params?.objectif_investissement,params?.revenu)||'');
+  const [mPlaisir,setMPlaisir]=useState(params?.objectif_plaisir||0);
+  const [mEpargne,setMEpargne]=useState(params?.objectif_epargne||0);
+  const [mInvest,setMInvest]=useState(params?.objectif_investissement||0);
   const [objInvM,setObjInvM]=useState(String(params?.objectif_montant||''));
   const [objInvA,setObjInvA]=useState(String(params?.objectif_annees||'15'));
   const [objEpM,setObjEpM]=useState(String(params?.objectif_epargne_montant||''));
@@ -725,16 +725,21 @@ function ParamsScreen({user,params,onSave,onBack}){
 
   const rev=revenus.reduce((s,r)=>s+r.montant,0);
   const totalC=charges.reduce((s,c)=>s+c.montant,0);
-  const pC=rev>0?Math.round(totalC/rev*100):0;
-  const reste=100-pC-(Number(pPlaisir)||0)-(Number(pEpargne)||0)-(Number(pInvest)||0);
+  const pC=rev>0?totalC/rev*100:0; // exact float — l'arrondi ne se fait qu'à l'affichage
+  const pCLabel=Math.round(pC);
+  // Pourcentages dérivés depuis les montants absolus — ne jamais stocker en %
+  const pPlaisir=rev>0?Math.round(mPlaisir/rev*100):0;
+  const pEpargne=rev>0?Math.round(mEpargne/rev*100):0;
+  const pInvest=rev>0?Math.round(mInvest/rev*100):0;
+  const reste=100-pCLabel-pPlaisir-pEpargne-pInvest;
 
   // update() garantit la mise à jour de la ligne existante
   async function save(applyToHistory){
     setSaving(true);
-    const data={revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:Math.round((Number(pPlaisir)||0)*rev/100),charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15};
+    const data={revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:mPlaisir,charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15};
     if(applyToHistory){
-      data.objectif_epargne=Math.round((Number(pEpargne)||0)*rev/100);
-      data.objectif_investissement=Math.round((Number(pInvest)||0)*rev/100);
+      data.objectif_epargne=mEpargne;
+      data.objectif_investissement=mInvest;
     } else {
       data.objectif_epargne=params?.objectif_epargne||0;
       data.objectif_investissement=params?.objectif_investissement||0;
@@ -775,12 +780,12 @@ function ParamsScreen({user,params,onSave,onBack}){
         <Card style={{marginBottom:14}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
             <h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',textTransform:'uppercase',letterSpacing:'0.5px'}}>🎯 Allocation</h3>
-            <span style={{fontSize:12,padding:'3px 10px',borderRadius:20,fontWeight:700,background:reste<0?'#FEF2F2':reste===0?'#D1FAE5':'#FEF3C7',color:reste<0?'#B91C1C':reste===0?'#065F46':'#92400E'}}>{100-reste}% alloué</span>
+            <span style={{fontSize:12,padding:'3px 10px',borderRadius:20,fontWeight:700,background:reste<0?'#FEF2F2':reste===0?'#D1FAE5':'#FEF3C7',color:reste<0?'#B91C1C':reste===0?'#065F46':'#92400E'}}>{Math.round(100-reste)}% alloué</span>
           </div>
-          <PctRow emoji="🏠" label={`Charges (${pC}%)`} pct={pC} onChange={()=>{}} revenu={rev} rest={0} locked={true}/>
-          <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={setPPlaisir} revenu={rev} rest={reste} editable={true}/>
-          <PctRow emoji="🏦" label="Épargne / mois" pct={pEpargne} onChange={setPEpargne} revenu={rev} rest={reste} editable={true}/>
-          <PctRow emoji="📈" label="Investissement / mois" pct={pInvest} onChange={setPInvest} revenu={rev} rest={reste} editable={true}/>
+          <PctRow emoji="🏠" label={`Charges (${pCLabel}%)`} pct={pC} onChange={()=>{}} revenu={rev} rest={0} locked={true} exactAmount={totalC}/>
+          <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={pct=>setMPlaisir(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mPlaisir}/>
+          <PctRow emoji="🏦" label="Épargne / mois" pct={pEpargne} onChange={pct=>setMEpargne(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mEpargne}/>
+          <PctRow emoji="📈" label="Investissement / mois" pct={pInvest} onChange={pct=>setMInvest(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mInvest}/>
           <div style={{display:'flex',justifyContent:'space-between',padding:'10px 14px',background:reste<0?'#FEF2F2':'#F9FAFB',borderRadius:12,marginTop:4,border:`1px solid ${reste<0?'#FECACA':'#E5E7EB'}`}}>
             <span style={{fontSize:13,fontWeight:600,color:'#1E293B'}}>{reste<0?'⚠️ Dépassement':reste===0?'✅ Tout alloué':'⬜ Non alloué'}</span>
             <span style={{fontSize:13,fontWeight:700,color:reste<0?'#B91C1C':reste===0?'#10B981':'#F59E0B'}}>{reste>=0?`${reste}%`:`+${-reste}%`} {rev>0&&`(${fmt(Math.abs(Math.round(reste*rev/100)))})`}</span>
@@ -793,7 +798,7 @@ function ParamsScreen({user,params,onSave,onBack}){
         <ObjectifForm emoji="🏦" label="Objectif épargne" montant={objEpM} setMontant={setObjEpM} annees={objEpA} setAnnees={setObjEpA} note="Montant d'épargne de précaution à atteindre"/>
       </Card>}
       {reste<0&&tab==='budget'&&<div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'12px 16px',marginBottom:14}}><p style={{color:'#B91C1C',fontSize:13}}>⚠️ Total dépasse 100%. Réduis un poste.</p></div>}
-      <Btn onClick={()=>setShowModal(true)} disabled={saving||(tab==='budget'&&reste<0)||rev===0} style={{width:'100%'}} variant="gold">{saving?'...':'✅ Enregistrer'}</Btn>
+      <Btn onClick={()=>setShowModal(true)} disabled={saving||(tab==='budget'&&reste<-0.5)||rev===0} style={{width:'100%'}} variant="gold">{saving?'...':'✅ Enregistrer'}</Btn>
 
       {/* ─── Soutien & Feedback ─── */}
       <div style={{marginTop:24,display:'flex',flexDirection:'column',gap:10}}>
