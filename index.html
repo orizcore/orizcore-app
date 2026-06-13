@@ -210,15 +210,28 @@ function SliderBar({p,maxP,onMove}){
   </div>);
 }
 
-function PctRow({emoji,label,pct,onChange,revenu,rest,editable,locked,exactAmount}){
+function PctRow({emoji,label,pct,onChange,revenu,rest,editable,locked,exactAmount,maxAmount}){
   const p=Number(pct)||0;
-  const maxP=locked?p:Math.min(100,p+Math.max(0,rest));
+  // maxAmount (en €) est la source de vérité pour le clamp — évite les écarts d'arrondi %
+  const maxAmt=maxAmount!==undefined?maxAmount:(revenu>0?Math.min(revenu,(p+Math.max(0,rest))/100*revenu):Infinity);
+  const maxP=locked?p:(revenu>0?Math.min(100,maxAmt/revenu*100):100);
   const displayAmt=()=>exactAmount!==undefined?exactAmount:Math.round(p*revenu/100);
   const [eurInput,setEurInput]=useState(String(displayAmt()||''));
   const isEditingEur=useRef(false);
   useEffect(()=>{if(!isEditingEur.current)setEurInput(String(displayAmt()));},[pct,revenu,exactAmount]);
-  function handlePct(raw){if(!locked)onChange(String(Math.min(maxP,Math.max(0,Number(raw)||0))));}
-  function handleEur(raw){setEurInput(raw);if(!revenu||locked)return;onChange(String(Math.min(maxP,Math.round(parseAmount(raw)/revenu*100))));}
+  function handlePct(raw){
+    if(locked)return;
+    const rawAmt=Math.max(0,(Number(raw)||0)/100*revenu);
+    const clampedAmt=Math.min(maxAmt,rawAmt);
+    onChange(String(revenu>0?clampedAmt/revenu*100:0));
+  }
+  function handleEur(raw){
+    setEurInput(raw);
+    if(!revenu||locked)return;
+    const rawAmt=Math.max(0,parseAmount(raw));
+    const clampedAmt=Math.min(maxAmt,rawAmt);
+    onChange(String(clampedAmt/revenu*100));
+  }
   return(<div style={{marginBottom:16}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
       <span style={{fontSize:13,fontWeight:600,color:locked?'#9CA3AF':'#374151'}}>{emoji} {label}{locked&&' 🔒'}</span>
@@ -352,7 +365,7 @@ function RevenusEditor({revenus,onChange}){
   </div>);
 }
 
-const CATS_CHARGES=['Loyer','Énergie','Eau','Internet','Téléphone','Assurance','Crédit','Transport','Abonnements','Autre'];
+const CATS_CHARGES=['Loyer','Énergie','Eau','Internet','Téléphone','Assurance','Crédit','Transport','Alimentation','Santé','Abonnements','Autre'];
 function ChargesEditor({charges,onChange,revenu}){
   const [showAdd,setShowAdd]=useState(false);
   const [newCat,setNewCat]=useState('Loyer');const [newCatCustom,setNewCatCustom]=useState('');
@@ -469,12 +482,37 @@ function BilanDetail({bilan,params,prevBilan,onClose,onUpdate,onDelete}){
 }
 
 function ObjectifForm({emoji,label,montant,setMontant,annees,setAnnees,note}){
+  // Horizon éditable en mois OU en années — converti en années (float) pour `annees`
+  const initAnneesNum=Number(annees)||0;
+  const initIsMonths=initAnneesNum>0&&initAnneesNum<1;
+  const [unit,setUnit]=useState(initIsMonths?'mois':'ans');
+  const [horizonVal,setHorizonVal]=useState(String(initIsMonths?Math.round(initAnneesNum*12):(initAnneesNum||15)));
+
+  useEffect(()=>{
+    const val=Number(horizonVal)||0;
+    const newAnnees=unit==='mois'?val/12:val;
+    setAnnees(String(newAnnees));
+  },[horizonVal,unit]);
+
   const effort=montant&&annees?Math.round(parseAmount(montant)/(Number(annees)||15)/12):0;
   return(<div style={{marginBottom:20}}>
     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}><span style={{fontSize:24}}>{emoji}</span><p style={{fontSize:15,fontWeight:700,color:'#0F172A'}}>{label}</p></div>
     {note&&<p style={{fontSize:12,color:'#64748B',marginBottom:12,lineHeight:1.5}}>{note}</p>}
     <InputField label="Montant cible" value={montant} onChange={setMontant} type="number" suffix="€"/>
-    <InputField label="Horizon" value={annees} onChange={setAnnees} type="number" suffix="ans"/>
+    <div style={{marginBottom:16}}>
+      <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>Horizon</label>
+      <div style={{display:'flex',gap:8}}>
+        <input type="number" min="0" value={horizonVal} onChange={e=>setHorizonVal(e.target.value)}
+          style={{flex:1,padding:'12px 14px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:15,color:'#0F172A',background:'#F8FAFC',fontFamily:'inherit'}}
+          onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+        <div style={{display:'flex',borderRadius:10,border:'1.5px solid #E5E7EB',overflow:'hidden'}}>
+          <button onClick={()=>setUnit('mois')} style={{padding:'0 14px',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,
+            background:unit==='mois'?'#2563EB':'#F8FAFC',color:unit==='mois'?'#fff':'#64748B',transition:'all 0.15s'}}>Mois</button>
+          <button onClick={()=>setUnit('ans')} style={{padding:'0 14px',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,
+            background:unit==='ans'?'#2563EB':'#F8FAFC',color:unit==='ans'?'#fff':'#64748B',transition:'all 0.15s'}}>Ans</button>
+        </div>
+      </div>
+    </div>
     {effort>0&&<div style={{background:'#EFF6FF',borderRadius:12,padding:'10px 14px',marginTop:-4}}><p style={{fontSize:12,color:'#1E40AF',fontWeight:600}}>Effort mensuel</p><p style={{fontSize:18,fontWeight:800,color:'#2563EB',marginTop:4}}>{fmt(effort)}/mois</p><p style={{fontSize:11,color:'#64748B',marginTop:2}}>hors rendement</p></div>}
   </div>);
 }
@@ -486,7 +524,7 @@ function ObjectifCard({emoji,label,color,pct,montantActuel,montantObj,annees,moi
       <span style={{fontSize:12,fontWeight:700,color}}>{pct}%</span>
     </div>
     <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
-      <span style={{fontSize:13,color:'#64748B'}}>Objectif {fmtK(montantObj)} en {annees} ans</span>
+      <span style={{fontSize:13,color:'#64748B'}}>Objectif {fmtK(montantObj)} en {Number(annees)<1?`${Math.round(Number(annees)*12)} mois`:`${Math.round(Number(annees))} ans`}</span>
       <span style={{fontSize:13,fontWeight:700,color:'#2563EB'}}>{fmtK(montantActuel)} / {fmtK(montantObj)}</span>
     </div>
     <div style={{height:10,background:'#E5E7EB',borderRadius:12,overflow:'hidden',marginBottom:8}}>
@@ -502,8 +540,8 @@ function BadgesSection({bilans,params}){
   const avgInvest=sorted.length>=2?sorted.slice(1).reduce((s,b,i)=>s+(b.placement-(sorted[i]?.placement||0)),0)/(sorted.length-1):0;
   const avgEp=sorted.length>=2?sorted.slice(1).reduce((s,b,i)=>s+(b.epargne-(sorted[i]?.epargne||0)),0)/(sorted.length-1):0;
   return(<div>
-    {objInvest>0&&<ObjectifCard emoji="📈" label="Objectif investissement" color="#D4A017" pct={progInvest} montantActuel={placement} montantObj={objInvest} annees={params?.objectif_annees||15} avgMensuel={avgInvest} moisRestants={avgInvest>0?Math.ceil(Math.max(0,objInvest-placement)/avgInvest):null}/>}
     {objEpargne>0&&<ObjectifCard emoji="🏦" label="Objectif épargne" color="#10B981" pct={progEpargne} montantActuel={epargne} montantObj={objEpargne} annees={params?.objectif_epargne_annees||15} avgMensuel={avgEp} moisRestants={avgEp>0?Math.ceil(Math.max(0,objEpargne-epargne)/avgEp):null}/>}
+    {objInvest>0&&<ObjectifCard emoji="📈" label="Objectif investissement" color="#D4A017" pct={progInvest} montantActuel={placement} montantObj={objInvest} annees={params?.objectif_annees||15} avgMensuel={avgInvest} moisRestants={avgInvest>0?Math.ceil(Math.max(0,objInvest-placement)/avgInvest):null}/>}
     {streak>0&&<div style={{background:'linear-gradient(135deg,#FEF3C7,#FDE68A)',borderRadius:12,padding:'12px 16px',marginBottom:14,display:'flex',alignItems:'center',gap:12}}><span style={{fontSize:28}}>🔥</span><div><p style={{fontSize:14,fontWeight:700,color:'#92400E'}}>{streak} mois consécutifs</p><p style={{fontSize:12,color:'#B45309'}}>Continue comme ça !</p></div></div>}
     <Card><h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:14,textTransform:'uppercase',letterSpacing:'0.5px'}}>🏅 Mes badges</h3>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
@@ -520,14 +558,23 @@ function BadgesSection({bilans,params}){
 function OnboardingFlow({user,onSave}){
   const [step,setStep]=useState(1);
   const [revenus,setRevenus]=useState([]);const [charges,setCharges]=useState([]);
-  const [pPlaisir,setPPlaisir]=useState('');const [pEpargne,setPEpargne]=useState('');const [pInvest,setPInvest]=useState('');
+  const [mPlaisir,setMPlaisir]=useState(0);const [mEpargne,setMEpargne]=useState(0);const [mInvest,setMInvest]=useState(0);
   const [objInvM,setObjInvM]=useState('');const [objInvA,setObjInvA]=useState('15');
   const [objEpM,setObjEpM]=useState('');const [objEpA,setObjEpA]=useState('15');
   const [saving,setSaving]=useState(false);
   const rev=revenus.reduce((s,r)=>s+r.montant,0);
   const totalC=charges.reduce((s,c)=>s+c.montant,0);
-  const pC=rev>0?Math.round(totalC/rev*100):0;
-  const reste=100-pC-(Number(pPlaisir)||0)-(Number(pEpargne)||0)-(Number(pInvest)||0);
+  const pC=rev>0?totalC/rev*100:0; // exact float
+  const pCLabel=Math.round(pC);
+  const pPlaisir=rev>0?Math.round(mPlaisir/rev*100):0;
+  const pEpargne=rev>0?Math.round(mEpargne/rev*100):0;
+  const pInvest=rev>0?Math.round(mInvest/rev*100):0;
+  const allocated=totalC+mPlaisir+mEpargne+mInvest;
+  const remainderEuros=rev-allocated;
+  const reste=rev>0?remainderEuros/rev*100:0;
+  const maxPlaisir=Math.max(0,mPlaisir+remainderEuros);
+  const maxEpargne=Math.max(0,mEpargne+remainderEuros);
+  const maxInvest=Math.max(0,mInvest+remainderEuros);
   async function finish(){
     setSaving(true);
     await supabase.from('params').upsert({user_id:user.id,revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:mPlaisir,objectif_epargne:mEpargne,objectif_investissement:mInvest,charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15});
@@ -560,14 +607,14 @@ function OnboardingFlow({user,onSave}){
   if(step===3) return(<div style={{minHeight:'100vh',background:'#F0F3FA',paddingBottom:40}}><Header title="Étape 3 — Répartition" sub="Alloue le reste de ton revenu" onBack={()=>setStep(2)}/>
     <div style={{padding:'24px 16px'}}>
       <Card style={{marginBottom:12}}>
-        <div style={{textAlign:'center',marginBottom:16}}><div style={{fontSize:36,marginBottom:8}}>🎯</div><p style={{fontSize:13,color:'#64748B'}}>Charges : <strong>{pC}%</strong>. Reste : <strong style={{color:'#10B981'}}>{100-pC}%</strong></p></div>
-        <PctRow emoji="🏠" label="Charges fixes (verrouillé)" pct={pC} onChange={()=>{}} revenu={rev} rest={0} locked={true}/>
-        <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={pct=>setMPlaisir(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mPlaisir}/>
-        <PctRow emoji="🏦" label="Épargne / mois" pct={pEpargne} onChange={pct=>setMEpargne(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mEpargne}/>
-        <PctRow emoji="📈" label="Investissement / mois" pct={pInvest} onChange={pct=>setMInvest(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mInvest}/>
+        <div style={{textAlign:'center',marginBottom:16}}><div style={{fontSize:36,marginBottom:8}}>🎯</div><p style={{fontSize:13,color:'#64748B'}}>Charges : <strong>{pCLabel}%</strong>. Reste : <strong style={{color:'#10B981'}}>{Math.max(0,Math.round(100-pCLabel-pPlaisir-pEpargne-pInvest))}%</strong></p></div>
+        <PctRow emoji="🏠" label={`Charges fixes (verrouillé) (${pCLabel}%)`} pct={pC} onChange={()=>{}} revenu={rev} rest={0} locked={true} exactAmount={totalC}/>
+        <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={pct=>setMPlaisir(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mPlaisir} maxAmount={maxPlaisir}/>
+        <PctRow emoji="🏦" label="Épargne / mois" pct={pEpargne} onChange={pct=>setMEpargne(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mEpargne} maxAmount={maxEpargne}/>
+        <PctRow emoji="📈" label="Investissement / mois" pct={pInvest} onChange={pct=>setMInvest(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mInvest} maxAmount={maxInvest}/>
         <div style={{display:'flex',justifyContent:'space-between',padding:'10px 14px',background:reste<0?'#FEF2F2':'#F9FAFB',borderRadius:12,marginTop:4,border:`1px solid ${reste<0?'#FECACA':'#E5E7EB'}`}}>
           <span style={{fontSize:13,fontWeight:600,color:'#1E293B'}}>{reste<0?'⚠️ Dépassement':reste===0?'✅ Tout alloué':'⬜ Non alloué'}</span>
-          <span style={{fontSize:13,fontWeight:700,color:reste<0?'#B91C1C':reste===0?'#10B981':'#F59E0B'}}>{reste>=0?`${reste}%`:`+${-reste}%`} {rev>0&&`(${fmt(Math.abs(Math.round(reste*rev/100)))})`}</span>
+          <span style={{fontSize:13,fontWeight:700,color:reste<0?'#B91C1C':reste===0?'#10B981':'#F59E0B'}}>{reste>=0?`${Math.round(reste)}%`:`+${Math.round(-reste)}%`} {rev>0&&`(${fmt(Math.abs(Math.round(reste*rev/100)))})`}</span>
         </div>
       </Card>
       <Btn onClick={()=>setStep(4)} disabled={reste<0} style={{width:'100%'}} variant="gold">Suivant →</Btn>
@@ -731,7 +778,13 @@ function ParamsScreen({user,params,onSave,onBack}){
   const pPlaisir=rev>0?Math.round(mPlaisir/rev*100):0;
   const pEpargne=rev>0?Math.round(mEpargne/rev*100):0;
   const pInvest=rev>0?Math.round(mInvest/rev*100):0;
-  const reste=100-pCLabel-pPlaisir-pEpargne-pInvest;
+  // Reste calculé en € exacts (pas via somme de % arrondis) pour éviter tout dépassement
+  const allocated=totalC+mPlaisir+mEpargne+mInvest;
+  const remainderEuros=rev-allocated;
+  const reste=rev>0?remainderEuros/rev*100:0;
+  const maxPlaisir=Math.max(0,mPlaisir+remainderEuros);
+  const maxEpargne=Math.max(0,mEpargne+remainderEuros);
+  const maxInvest=Math.max(0,mInvest+remainderEuros);
 
   // update() garantit la mise à jour de la ligne existante
   async function save(applyToHistory){
@@ -783,19 +836,19 @@ function ParamsScreen({user,params,onSave,onBack}){
             <span style={{fontSize:12,padding:'3px 10px',borderRadius:20,fontWeight:700,background:reste<0?'#FEF2F2':reste===0?'#D1FAE5':'#FEF3C7',color:reste<0?'#B91C1C':reste===0?'#065F46':'#92400E'}}>{Math.round(100-reste)}% alloué</span>
           </div>
           <PctRow emoji="🏠" label={`Charges (${pCLabel}%)`} pct={pC} onChange={()=>{}} revenu={rev} rest={0} locked={true} exactAmount={totalC}/>
-          <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={pct=>setMPlaisir(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mPlaisir}/>
-          <PctRow emoji="🏦" label="Épargne / mois" pct={pEpargne} onChange={pct=>setMEpargne(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mEpargne}/>
-          <PctRow emoji="📈" label="Investissement / mois" pct={pInvest} onChange={pct=>setMInvest(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mInvest}/>
+          <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={pct=>setMPlaisir(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mPlaisir} maxAmount={maxPlaisir}/>
+          <PctRow emoji="🏦" label="Épargne / mois" pct={pEpargne} onChange={pct=>setMEpargne(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mEpargne} maxAmount={maxEpargne}/>
+          <PctRow emoji="📈" label="Investissement / mois" pct={pInvest} onChange={pct=>setMInvest(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mInvest} maxAmount={maxInvest}/>
           <div style={{display:'flex',justifyContent:'space-between',padding:'10px 14px',background:reste<0?'#FEF2F2':'#F9FAFB',borderRadius:12,marginTop:4,border:`1px solid ${reste<0?'#FECACA':'#E5E7EB'}`}}>
             <span style={{fontSize:13,fontWeight:600,color:'#1E293B'}}>{reste<0?'⚠️ Dépassement':reste===0?'✅ Tout alloué':'⬜ Non alloué'}</span>
-            <span style={{fontSize:13,fontWeight:700,color:reste<0?'#B91C1C':reste===0?'#10B981':'#F59E0B'}}>{reste>=0?`${reste}%`:`+${-reste}%`} {rev>0&&`(${fmt(Math.abs(Math.round(reste*rev/100)))})`}</span>
+            <span style={{fontSize:13,fontWeight:700,color:reste<0?'#B91C1C':reste===0?'#10B981':'#F59E0B'}}>{reste>=0?`${Math.round(reste)}%`:`+${Math.round(-reste)}%`} {rev>0&&`(${fmt(Math.abs(Math.round(reste*rev/100)))})`}</span>
           </div>
         </Card>
       </>}
       {tab==='objectif'&&<Card style={{marginBottom:14}}>
-        <ObjectifForm emoji="📈" label="Objectif investissement" montant={objInvM} setMontant={setObjInvM} annees={objInvA} setAnnees={setObjInvA} note="Montant total à investir sur la durée choisie"/>
-        <div style={{height:1,background:'#F3F4F6',margin:'4px 0 20px'}}/>
         <ObjectifForm emoji="🏦" label="Objectif épargne" montant={objEpM} setMontant={setObjEpM} annees={objEpA} setAnnees={setObjEpA} note="Montant d'épargne de précaution à atteindre"/>
+        <div style={{height:1,background:'#F3F4F6',margin:'4px 0 20px'}}/>
+        <ObjectifForm emoji="📈" label="Objectif investissement" montant={objInvM} setMontant={setObjInvM} annees={objInvA} setAnnees={setObjInvA} note="Montant total à investir sur la durée choisie"/>
       </Card>}
       {reste<0&&tab==='budget'&&<div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'12px 16px',marginBottom:14}}><p style={{color:'#B91C1C',fontSize:13}}>⚠️ Total dépasse 100%. Réduis un poste.</p></div>}
       <Btn onClick={()=>setShowModal(true)} disabled={saving||(tab==='budget'&&reste<-0.5)||rev===0} style={{width:'100%'}} variant="gold">{saving?'...':'✅ Enregistrer'}</Btn>
