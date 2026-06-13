@@ -226,10 +226,10 @@ function PctRow({emoji,label,pct,onChange,revenu,rest,editable,locked,exactAmoun
     onChange(String(revenu>0?clampedAmt/revenu*100:0));
   }
   function handleEur(raw){
-    setEurInput(raw);
-    if(!revenu||locked)return;
+    if(!revenu||locked){setEurInput(raw);return;}
     const rawAmt=Math.max(0,parseAmount(raw));
     const clampedAmt=Math.min(maxAmt,rawAmt);
+    setEurInput(String(clampedAmt)); // empêche le spinner natif de "dériver" au-delà du max
     onChange(String(clampedAmt/revenu*100));
   }
   return(<div style={{marginBottom:16}}>
@@ -242,7 +242,7 @@ function PctRow({emoji,label,pct,onChange,revenu,rest,editable,locked,exactAmoun
         </div>
         {editable&&revenu>0?(
           <div style={{display:'flex',alignItems:'center',background:locked?'#F3F4F6':'#FFFBEB',border:'1.5px solid #FDE68A',borderRadius:10,overflow:'hidden',minWidth:80}}>
-            <input type="number" min="0" value={eurInput} onChange={e=>handleEur(e.target.value)} onFocus={()=>{isEditingEur.current=true;}} onBlur={()=>{isEditingEur.current=false;}} disabled={locked} style={{width:60,padding:'6px 2px 6px 10px',border:'none',background:'transparent',fontSize:14,fontWeight:700,color:locked?'#9CA3AF':'#92400E',textAlign:'right'}}/>
+            <input type="number" min="0" max={Math.floor(maxAmt)} value={eurInput} onChange={e=>handleEur(e.target.value)} onFocus={()=>{isEditingEur.current=true;}} onBlur={()=>{isEditingEur.current=false;}} disabled={locked} style={{width:60,padding:'6px 2px 6px 10px',border:'none',background:'transparent',fontSize:14,fontWeight:700,color:locked?'#9CA3AF':'#92400E',textAlign:'right'}}/>
             <span style={{fontSize:13,color:'#D97706',paddingRight:8,paddingLeft:2}}>€</span>
           </div>
         ):(
