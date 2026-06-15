@@ -111,10 +111,14 @@ function calcScore(bilan,params,prevBilan) {
   const prevPat=prevBilan?prevBilan.compte_courant+prevBilan.epargne+prevBilan.placement:null;
   const deltaEp=prevBilan?bilan.epargne-prevBilan.epargne:bilan.epargne;
   const deltaPl=prevBilan?bilan.placement-prevBilan.placement:bilan.placement;
+  // Chaque bilan garde un "instantané" de ses objectifs au moment de sa création.
+  // Si absent (anciens bilans), on retombe sur les objectifs actuels.
+  const objEp=(bilan.objectif_epargne!=null)?bilan.objectif_epargne:params?.objectif_epargne;
+  const objInv=(bilan.objectif_investissement!=null)?bilan.objectif_investissement:params?.objectif_investissement;
   details.suivi=true; score+=20;
   details.patrimoine=prevPat===null||pat>=prevPat; if(details.patrimoine) score+=30;
-  details.epargne=!params?.objectif_epargne||deltaEp>=params.objectif_epargne; if(details.epargne) score+=25;
-  details.placement=!params?.objectif_investissement||deltaPl>=params.objectif_investissement; if(details.placement) score+=25;
+  details.epargne=!objEp||deltaEp>=objEp; if(details.epargne) score+=25;
+  details.placement=!objInv||deltaPl>=objInv; if(details.placement) score+=25;
   return {score,details,patrimoine:pat,deltaEp,deltaPl};
 }
 
@@ -789,14 +793,22 @@ function ParamsScreen({user,params,onSave,onBack}){
   // update() garantit la mise à jour de la ligne existante
   async function save(applyToHistory){
     setSaving(true);
-    const data={revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:mPlaisir,charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15};
+    // Les montants saisis (mEpargne, mInvest) sont TOUJOURS la source de vérité
+    // pour les paramètres actuels / futurs bilans — jamais écrasés par d'anciennes valeurs.
+    const oldEp=params?.objectif_epargne||0;
+    const oldInv=params?.objectif_investissement||0;
+    const data={revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:mPlaisir,objectif_epargne:mEpargne,objectif_investissement:mInvest,charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15};
+
     if(applyToHistory){
-      data.objectif_epargne=mEpargne;
-      data.objectif_investissement=mInvest;
+      // Recalcule le score de TOUS les bilans passés avec les nouveaux objectifs
+      await supabase.from('bilans').update({objectif_epargne:mEpargne,objectif_investissement:mInvest}).eq('user_id',user.id);
     } else {
-      data.objectif_epargne=params?.objectif_epargne||0;
-      data.objectif_investissement=params?.objectif_investissement||0;
+      // Gèle l'historique : les bilans qui n'ont pas encore d'instantané d'objectifs
+      // (créés avant cette fonctionnalité) gardent les ANCIENS objectifs.
+      // Les nouveaux bilans utiliseront les nouveaux objectifs (via objectif_epargne/investissement dans params).
+      await supabase.from('bilans').update({objectif_epargne:oldEp,objectif_investissement:oldInv}).eq('user_id',user.id).is('objectif_epargne',null);
     }
+
     await supabase.from('params').update(data).eq('user_id',user.id);
     const{data:fresh}=await supabase.from('params').select().eq('user_id',user.id).single();
     setSaving(false);onSave(fresh);
@@ -807,9 +819,9 @@ function ParamsScreen({user,params,onSave,onBack}){
     {showModal&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:300,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={e=>{if(e.target===e.currentTarget)setShowModal(false);}}>
       <div className="pop" style={{background:'#FFFFFF',borderRadius:'20px 20px 0 0',width:'100%',maxWidth:680,padding:'24px 20px 36px'}}>
         <h3 style={{fontSize:17,fontWeight:700,color:'#0F172A',marginBottom:8}}>Impact sur l'historique</h3>
-        <p style={{fontSize:13,color:'#64748B',lineHeight:1.6,marginBottom:20}}>Tu as modifié les objectifs d'épargne ou d'investissement.<br/>Veux-tu que ces changements s'appliquent à <strong>tous tes bilans passés</strong> (les scores seront recalculés) ou uniquement aux <strong>prochains mois</strong> ?</p>
-        <Btn onClick={()=>{save(true);setShowModal(false);}} style={{width:'100%',marginBottom:10}} variant="primary" disabled={saving}>📊 Mettre à jour tous mes bilans</Btn>
-        <Btn onClick={()=>{save(false);setShowModal(false);}} style={{width:'100%'}} variant="outline" disabled={saving}>➡️ Appliquer aux prochains mois seulement</Btn>
+        <p style={{fontSize:13,color:'#64748B',lineHeight:1.6,marginBottom:20}}>Veux-tu que ces changements s'appliquent à <strong>tous tes bilans passés</strong> (les scores seront recalculés) ou uniquement aux <strong>prochains mois</strong> (les bilans déjà enregistrés gardent leurs anciens objectifs) ?</p>
+        <Btn onClick={()=>{save(true);setShowModal(false);}} style={{width:'100%',marginBottom:10}} variant="primary" disabled={saving}>{saving?'...':'📊 Mettre à jour tous mes bilans'}</Btn>
+        <Btn onClick={()=>{save(false);setShowModal(false);}} style={{width:'100%'}} variant="outline" disabled={saving}>{saving?'...':'➡️ Appliquer aux prochains mois seulement'}</Btn>
         <button onClick={()=>setShowModal(false)} style={{display:'block',margin:'14px auto 0',background:'none',border:'none',color:'#94A3B8',fontSize:13,cursor:'pointer'}}>Annuler</button>
       </div>
     </div>}
@@ -919,7 +931,7 @@ function AddMonthScreen({user,bilans,params,onSave,onBack}){
   const cur={compte_courant:parseAmount(cc),epargne:parseAmount(ep),placement:parseAmount(pl),mois};
   const{score,details,patrimoine,deltaEp,deltaPl}=calcScore(cur,params,prev);
   const hasValues=cc||ep||pl;
-  async function save(){setSaving(true);await supabase.from('bilans').insert({user_id:user.id,mois,compte_courant:parseAmount(cc),epargne:parseAmount(ep),placement:parseAmount(pl)});setSaving(false);onSave();}
+  async function save(){setSaving(true);await supabase.from('bilans').insert({user_id:user.id,mois,compte_courant:parseAmount(cc),epargne:parseAmount(ep),placement:parseAmount(pl),objectif_epargne:params?.objectif_epargne||0,objectif_investissement:params?.objectif_investissement||0});setSaving(false);onSave();}
   return(<div style={{minHeight:'100vh',background:'#F0F3FA',paddingBottom:40}}>
     <div style={{background:'#0B1437',padding:'20px 20px 28px',position:'sticky',top:0,zIndex:10}}>
       <div style={{display:'flex',alignItems:'center',gap:12}}>
