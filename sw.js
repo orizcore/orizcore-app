@@ -1,9 +1,7 @@
-const CACHE_NAME = 'orizcore-v2';
+const CACHE_NAME = 'orizcore-v3';
 
-// Fichiers à mettre en cache pour le mode hors-ligne
+// Fichiers statiques (icônes, polices, libs) — peuvent rester en cache
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
@@ -37,17 +35,30 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Fetch : cache-first pour les assets statiques, network-first pour Supabase
+// Fetch
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
-  // Toujours réseau pour les appels Supabase (données en temps réel)
+  // Toujours réseau pour Supabase (données temps réel)
   if (url.hostname.includes('supabase.co')) {
     event.respondWith(fetch(event.request));
     return;
   }
 
-  // Cache-first pour tout le reste
+  // Navigation (index.html / app) — TOUJOURS réseau en priorité.
+  // Le cache ne sert que si le réseau est indisponible (mode hors-ligne).
+  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+    event.respondWith(
+      fetch(event.request).then(response => {
+        const toCache = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put(event.request, toCache));
+        return response;
+      }).catch(() => caches.match(event.request).then(r => r || caches.match('/index.html')))
+    );
+    return;
+  }
+
+  // Tout le reste (icônes, polices, libs JS) — cache-first
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
@@ -56,7 +67,7 @@ self.addEventListener('fetch', event => {
         const toCache = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, toCache));
         return response;
-      }).catch(() => caches.match('/index.html'));
+      });
     })
   );
 });
