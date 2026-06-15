@@ -1,4 +1,4 @@
-const CACHE_NAME = 'orizcore-v1';
+const CACHE_NAME = 'orizcore-v2';
 
 // Fichiers à mettre en cache pour le mode hors-ligne
 const STATIC_ASSETS = [
