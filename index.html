@@ -509,10 +509,10 @@ function ObjectifForm({emoji,label,montant,setMontant,annees,setAnnees,note}){
         <input type="number" min="0" value={horizonVal} onChange={e=>setHorizonVal(e.target.value)}
           style={{flex:1,padding:'12px 14px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:15,color:'#0F172A',background:'#F8FAFC',fontFamily:'inherit'}}
           onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
-        <div style={{display:'flex',borderRadius:10,border:'1.5px solid #E5E7EB',overflow:'hidden'}}>
-          <button onClick={()=>setUnit('mois')} style={{flex:1,padding:'12px 0',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,textAlign:'center',minWidth:56,
+        <div style={{display:'flex',borderRadius:10,border:'1.5px solid #E5E7EB',overflow:'hidden',width:120,flexShrink:0}}>
+          <button onClick={()=>setUnit('mois')} style={{width:'50%',padding:'12px 0',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,textAlign:'center',
             background:unit==='mois'?'#2563EB':'#F8FAFC',color:unit==='mois'?'#fff':'#64748B',transition:'all 0.15s'}}>Mois</button>
-          <button onClick={()=>setUnit('ans')} style={{flex:1,padding:'12px 0',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,textAlign:'center',minWidth:56,
+          <button onClick={()=>setUnit('ans')} style={{width:'50%',padding:'12px 0',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,textAlign:'center',
             background:unit==='ans'?'#2563EB':'#F8FAFC',color:unit==='ans'?'#fff':'#64748B',transition:'all 0.15s'}}>Ans</button>
         </div>
       </div>
@@ -950,7 +950,7 @@ function AddMonthScreen({user,bilans,params,onSave,onBack}){
     <div style={{padding:'20px 16px'}}>
       <Card style={{marginBottom:14}}>
         <label style={{fontSize:12,fontWeight:600,color:'#1E293B',display:'block',marginBottom:5,textTransform:'uppercase',letterSpacing:'0.5px'}}>Mois</label>
-        <input type="month" value={mois} onChange={e=>setMois(e.target.value)} style={{width:'100%',padding:'11px 14px',border:'1.5px solid #E5E7EB',borderRadius:12,fontSize:15,color:'#0F172A',background:'#F7F9FC'}} onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+        <input type="month" value={mois} onChange={e=>setMois(e.target.value)} style={{width:'100%',maxWidth:'100%',boxSizing:'border-box',display:'block',padding:'11px 14px',border:'1.5px solid #E5E7EB',borderRadius:12,fontSize:15,color:'#0F172A',background:'#F7F9FC',WebkitAppearance:'none',appearance:'none',fontFamily:'inherit'}} onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
       </Card>
       <Card style={{marginBottom:14}}>
         <h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:14,textTransform:'uppercase',letterSpacing:'0.5px'}}>💳 Mes soldes actuels</h3>
