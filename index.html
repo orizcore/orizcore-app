@@ -613,9 +613,9 @@ function OnboardingFlow({user,onSave}){
       <Card style={{marginBottom:12}}>
         <div style={{textAlign:'center',marginBottom:16}}><div style={{fontSize:36,marginBottom:8}}>🎯</div><p style={{fontSize:13,color:'#64748B'}}>Charges : <strong>{pCLabel}%</strong>. Reste : <strong style={{color:'#10B981'}}>{Math.max(0,Math.round(100-pCLabel-pPlaisir-pEpargne-pInvest))}%</strong></p></div>
         <PctRow emoji="🏠" label={`Charges fixes (verrouillé) (${pCLabel}%)`} pct={pC} onChange={()=>{}} revenu={rev} rest={0} locked={true} exactAmount={totalC}/>
-        <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={pct=>setMPlaisir(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mPlaisir} maxAmount={maxPlaisir}/>
         <PctRow emoji="🏦" label="Épargne / mois" pct={pEpargne} onChange={pct=>setMEpargne(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mEpargne} maxAmount={maxEpargne}/>
         <PctRow emoji="📈" label="Investissement / mois" pct={pInvest} onChange={pct=>setMInvest(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mInvest} maxAmount={maxInvest}/>
+        <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={pct=>setMPlaisir(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mPlaisir} maxAmount={maxPlaisir}/>
         <div style={{display:'flex',justifyContent:'space-between',padding:'10px 14px',background:reste<0?'#FEF2F2':'#F9FAFB',borderRadius:12,marginTop:4,border:`1px solid ${reste<0?'#FECACA':'#E5E7EB'}`}}>
           <span style={{fontSize:13,fontWeight:600,color:'#1E293B'}}>{reste<0?'⚠️ Dépassement':reste===0?'✅ Tout alloué':'⬜ Non alloué'}</span>
           <span style={{fontSize:13,fontWeight:700,color:reste<0?'#B91C1C':reste===0?'#10B981':'#F59E0B'}}>{reste>=0?`${Math.round(reste)}%`:`+${Math.round(-reste)}%`} {rev>0&&`(${fmt(Math.abs(Math.round(reste*rev/100)))})`}</span>
@@ -848,9 +848,9 @@ function ParamsScreen({user,params,onSave,onBack}){
             <span style={{fontSize:12,padding:'3px 10px',borderRadius:20,fontWeight:700,background:reste<0?'#FEF2F2':reste===0?'#D1FAE5':'#FEF3C7',color:reste<0?'#B91C1C':reste===0?'#065F46':'#92400E'}}>{Math.round(100-reste)}% alloué</span>
           </div>
           <PctRow emoji="🏠" label={`Charges (${pCLabel}%)`} pct={pC} onChange={()=>{}} revenu={rev} rest={0} locked={true} exactAmount={totalC}/>
-          <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={pct=>setMPlaisir(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mPlaisir} maxAmount={maxPlaisir}/>
           <PctRow emoji="🏦" label="Épargne / mois" pct={pEpargne} onChange={pct=>setMEpargne(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mEpargne} maxAmount={maxEpargne}/>
           <PctRow emoji="📈" label="Investissement / mois" pct={pInvest} onChange={pct=>setMInvest(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mInvest} maxAmount={maxInvest}/>
+          <PctRow emoji="🎉" label="Dépenses plaisir" pct={pPlaisir} onChange={pct=>setMPlaisir(Math.round(pct*rev/100))} revenu={rev} rest={reste} editable={true} exactAmount={mPlaisir} maxAmount={maxPlaisir}/>
           <div style={{display:'flex',justifyContent:'space-between',padding:'10px 14px',background:reste<0?'#FEF2F2':'#F9FAFB',borderRadius:12,marginTop:4,border:`1px solid ${reste<0?'#FECACA':'#E5E7EB'}`}}>
             <span style={{fontSize:13,fontWeight:600,color:'#1E293B'}}>{reste<0?'⚠️ Dépassement':reste===0?'✅ Tout alloué':'⬜ Non alloué'}</span>
             <span style={{fontSize:13,fontWeight:700,color:reste<0?'#B91C1C':reste===0?'#10B981':'#F59E0B'}}>{reste>=0?`${Math.round(reste)}%`:`+${Math.round(-reste)}%`} {rev>0&&`(${fmt(Math.abs(Math.round(reste*rev/100)))})`}</span>
