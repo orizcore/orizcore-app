@@ -507,12 +507,12 @@ function ObjectifForm({emoji,label,montant,setMontant,annees,setAnnees,note}){
       <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>Horizon</label>
       <div style={{display:'flex',gap:8}}>
         <input type="number" min="0" value={horizonVal} onChange={e=>setHorizonVal(e.target.value)}
-          style={{flex:1,padding:'12px 14px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:15,color:'#0F172A',background:'#F8FAFC',fontFamily:'inherit'}}
+          style={{flex:1,minWidth:0,padding:'12px 10px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:15,color:'#0F172A',background:'#F8FAFC',fontFamily:'inherit',boxSizing:'border-box'}}
           onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
-        <div style={{display:'flex',borderRadius:10,border:'1.5px solid #E5E7EB',overflow:'hidden',width:120,flexShrink:0}}>
-          <button onClick={()=>setUnit('mois')} style={{width:'50%',padding:'12px 0',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,textAlign:'center',
+        <div style={{display:'flex',borderRadius:10,border:'1.5px solid #E5E7EB',overflow:'hidden',width:90,flexShrink:0}}>
+          <button onClick={()=>setUnit('mois')} style={{width:'50%',padding:'12px 0',border:'none',cursor:'pointer',fontSize:12,fontWeight:700,textAlign:'center',
             background:unit==='mois'?'#2563EB':'#F8FAFC',color:unit==='mois'?'#fff':'#64748B',transition:'all 0.15s'}}>Mois</button>
-          <button onClick={()=>setUnit('ans')} style={{width:'50%',padding:'12px 0',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,textAlign:'center',
+          <button onClick={()=>setUnit('ans')} style={{width:'50%',padding:'12px 0',border:'none',cursor:'pointer',fontSize:12,fontWeight:700,textAlign:'center',
             background:unit==='ans'?'#2563EB':'#F8FAFC',color:unit==='ans'?'#fff':'#64748B',transition:'all 0.15s'}}>Ans</button>
         </div>
       </div>
