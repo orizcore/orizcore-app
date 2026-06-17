@@ -510,9 +510,9 @@ function ObjectifForm({emoji,label,montant,setMontant,annees,setAnnees,note}){
           style={{flex:1,padding:'12px 14px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:15,color:'#0F172A',background:'#F8FAFC',fontFamily:'inherit'}}
           onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
         <div style={{display:'flex',borderRadius:10,border:'1.5px solid #E5E7EB',overflow:'hidden'}}>
-          <button onClick={()=>setUnit('mois')} style={{padding:'0 14px',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,
+          <button onClick={()=>setUnit('mois')} style={{flex:1,padding:'12px 0',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,textAlign:'center',minWidth:56,
             background:unit==='mois'?'#2563EB':'#F8FAFC',color:unit==='mois'?'#fff':'#64748B',transition:'all 0.15s'}}>Mois</button>
-          <button onClick={()=>setUnit('ans')} style={{padding:'0 14px',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,
+          <button onClick={()=>setUnit('ans')} style={{flex:1,padding:'12px 0',border:'none',cursor:'pointer',fontSize:13,fontWeight:700,textAlign:'center',minWidth:56,
             background:unit==='ans'?'#2563EB':'#F8FAFC',color:unit==='ans'?'#fff':'#64748B',transition:'all 0.15s'}}>Ans</button>
         </div>
       </div>
