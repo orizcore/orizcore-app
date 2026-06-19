@@ -761,6 +761,7 @@ function FeedbackBlock({userId}){
 
 function ParamsScreen({user,params,onSave,onBack}){
   const toP=(m,r)=>r>0?String(Math.round((m||0)/r*100)):'';
+  const [prenom,setPrenom]=useState(params?.prenom||'');
   const [revenus,setRevenus]=useState(parseCharges(params?.revenus_detail));
   const [charges,setCharges]=useState(parseCharges(params?.charges_detail));
   const [mPlaisir,setMPlaisir]=useState(params?.objectif_plaisir||0);
@@ -797,7 +798,7 @@ function ParamsScreen({user,params,onSave,onBack}){
     // pour les paramètres actuels / futurs bilans — jamais écrasés par d'anciennes valeurs.
     const oldEp=params?.objectif_epargne||0;
     const oldInv=params?.objectif_investissement||0;
-    const data={revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:mPlaisir,objectif_epargne:mEpargne,objectif_investissement:mInvest,charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15};
+    const data={prenom:prenom.trim(),revenu:rev,revenus_detail:JSON.stringify(revenus),objectif_charges:totalC,objectif_plaisir:mPlaisir,objectif_epargne:mEpargne,objectif_investissement:mInvest,charges_detail:JSON.stringify(charges),objectif_montant:parseAmount(objInvM),objectif_annees:Number(objInvA)||15,objectif_epargne_montant:parseAmount(objEpM),objectif_epargne_annees:Number(objEpA)||15};
 
     if(applyToHistory){
       // Recalcule le score de TOUS les bilans passés avec les nouveaux objectifs
@@ -840,6 +841,10 @@ function ParamsScreen({user,params,onSave,onBack}){
     </div>
     <div style={{padding:'20px 16px'}}>
       {tab==='budget'&&<>
+        <Card style={{marginBottom:14}}>
+          <h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:14,textTransform:'uppercase',letterSpacing:'0.5px'}}>👤 Mon profil</h3>
+          <InputField label="Prénom (optionnel)" value={prenom} onChange={setPrenom} placeholder="Ex : Thomas"/>
+        </Card>
         <Card style={{marginBottom:14}}><h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:14,textTransform:'uppercase',letterSpacing:'0.5px'}}>💰 Revenus mensuels</h3><RevenusEditor revenus={revenus} onChange={setRevenus}/></Card>
         <Card style={{marginBottom:14}}><h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:14,textTransform:'uppercase',letterSpacing:'0.5px'}}>🏠 Charges fixes</h3><ChargesEditor charges={charges} onChange={setCharges} revenu={rev}/></Card>
         <Card style={{marginBottom:14}}>
@@ -991,7 +996,7 @@ function DashboardScreen({bilans,params,onAddMonth,onDeconnexion,onUpdateBilan})
     {selectedBilan&&<BilanDetail bilan={selectedBilan} params={params} prevBilan={sorted[sorted.findIndex(b=>b.id===selectedBilan.id)-1]||null} onClose={()=>setSelectedBilan(null)} onUpdate={()=>{setSelectedBilan(null);onUpdateBilan();}} onDelete={()=>{setSelectedBilan(null);onUpdateBilan();}}/>}
     <div style={{background:'linear-gradient(150deg,#0B1437 0%,#162057 55%,#1D3086 100%)',padding:'22px 20px 0',boxShadow:'0 4px 24px rgba(11,20,55,0.3)'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
-        <div style={{display:'flex',alignItems:'center',gap:10}}><img src={LOGO_ICON_SRC} alt="Orizcore" style={{height:36,borderRadius:"50%"}}/><div><p style={{color:'rgba(255,255,255,0.65)',fontSize:11}}>Tableau de bord</p></div></div>
+        <div style={{display:'flex',alignItems:'center',gap:10}}><img src={LOGO_ICON_SRC} alt="Orizcore" style={{height:36,borderRadius:"50%"}}/><div><p style={{color:'rgba(255,255,255,0.65)',fontSize:11}}>Tableau de bord</p>{params?.prenom&&<p style={{color:'white',fontSize:15,fontWeight:700,marginTop:2}}>Bonjour {params.prenom} 👋</p>}</div></div>
         <button onClick={onDeconnexion} style={{background:'rgba(255,255,255,0.15)',border:'none',color:'white',borderRadius:12,padding:'8px 14px',cursor:'pointer',fontSize:13,fontWeight:600}}>🔓 Déconnexion</button>
       </div>
       <div style={{display:'flex',gap:6,paddingBottom:12}}>
