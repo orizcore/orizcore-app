@@ -98,7 +98,7 @@ const supabase = createClient(
 );
 
 function parseAmount(val) { const s=String(val).replace(/ /g,'').replace(',','.'); const n=parseFloat(s); return isNaN(n)?0:Math.round(n); }
-function parseCharges(str) { try{return JSON.parse(str||'[]');}catch{return [];} }
+function parseCharges(str) { try{return JSON.parse(str||'[]');}catch(e){return [];} }
 function fmt(n) { return Number(n||0).toLocaleString('fr-FR')+' €'; }
 function fmtK(n) { const v=Number(n||0); if(v>=1000000) return (v/1000000).toFixed(1).replace('.',',')+' M€'; if(v>=1000) return (v/1000).toFixed(0)+' k€'; return fmt(v); }
 function moisLabel(m) { if(!m) return '—'; const [y,mo]=m.split('-'); return ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'][parseInt(mo)-1]+' '+y; }
@@ -107,8 +107,13 @@ function scoreLabel(s) { if(s>=90) return 'Excellent 🏆'; if(s>=70) return 'Bo
 
 function calcScore(bilan,params,prevBilan) {
   let score=0; const details={};
-  const pat=bilan.compte_courant+bilan.epargne+bilan.placement;
-  const prevPat=prevBilan?prevBilan.compte_courant+prevBilan.epargne+prevBilan.placement:null;
+  // placement_valeur = valeur réelle du PEA/CTO (titres+espèces) → utilisée pour le patrimoine total
+  // placement = cumul des versements (effort d'investissement) → utilisé pour le score de discipline
+  // Fallback sur placement si placement_valeur est absent (anciens bilans avant cette distinction)
+  const plValeur=(bilan.placement_valeur!=null)?bilan.placement_valeur:bilan.placement;
+  const prevPlValeur=prevBilan?((prevBilan.placement_valeur!=null)?prevBilan.placement_valeur:prevBilan.placement):null;
+  const pat=bilan.compte_courant+bilan.epargne+plValeur;
+  const prevPat=prevBilan?prevBilan.compte_courant+prevBilan.epargne+prevPlValeur:null;
   const deltaEp=prevBilan?bilan.epargne-prevBilan.epargne:bilan.epargne;
   const deltaPl=prevBilan?bilan.placement-prevBilan.placement:bilan.placement;
   // Chaque bilan garde un "instantané" de ses objectifs au moment de sa création.
@@ -258,6 +263,77 @@ function PctRow({emoji,label,pct,onChange,revenu,rest,editable,locked,exactAmoun
   </div>);
 }
 
+
+function GraphDonut({data,label}){
+  // data = [{label, value, color}]
+  const total=data.reduce((s,d)=>s+d.value,0);
+  if(!total) return <div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>Aucune donnée disponible</div>;
+
+  const R=70,CX=90,CY=90,strokeW=22;
+  const circumference=2*Math.PI*R;
+  let offset=0;
+  const arcs=data.map(d=>{
+    const pct=d.value/total;
+    const arc={...d,pct,dasharray:`${pct*circumference} ${circumference}`,dashoffset:-offset*circumference};
+    offset+=pct;
+    return arc;
+  });
+
+  const [hovered,setHovered]=useState(null);
+  const hoveredItem=hovered!==null?arcs[hovered]:null;
+
+  return(<div>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+      <span style={{fontSize:12,fontWeight:600,color:'#1E293B',textTransform:'uppercase',letterSpacing:'0.5px'}}>{label}</span>
+      <span style={{fontSize:13,fontWeight:700,color:'#0B1437'}}>{fmtK(total)}</span>
+    </div>
+    <div style={{display:'flex',alignItems:'center',gap:20}}>
+      {/* Donut SVG */}
+      <div style={{position:'relative',flexShrink:0}}>
+        <svg width={180} height={180} viewBox="0 0 180 180">
+          {/* Fond */}
+          <circle cx={CX} cy={CY} r={R} fill="none" stroke="#F1F5F9" strokeWidth={strokeW}/>
+          {/* Arcs */}
+          {arcs.map((arc,i)=>(
+            <circle key={i} cx={CX} cy={CY} r={R} fill="none"
+              stroke={arc.color} strokeWidth={hovered===i?strokeW+4:strokeW}
+              strokeDasharray={arc.dasharray}
+              strokeDashoffset={arc.dashoffset}
+              strokeLinecap="butt"
+              style={{cursor:'pointer',transition:'stroke-width 0.2s',transformOrigin:`${CX}px ${CY}px`,transform:'rotate(-90deg)'}}
+              onMouseEnter={()=>setHovered(i)} onMouseLeave={()=>setHovered(null)}
+              onTouchStart={()=>setHovered(i)} onTouchEnd={()=>setHovered(null)}/>
+          ))}
+          {/* Centre */}
+          <text x={CX} y={CY-8} textAnchor="middle" fontSize="11" fill="#94A3B8" fontFamily="Inter,sans-serif">
+            {hoveredItem?hoveredItem.label:'Total'}
+          </text>
+          <text x={CX} y={CY+10} textAnchor="middle" fontSize="15" fontWeight="800" fill="#0F172A" fontFamily="Inter,sans-serif">
+            {hoveredItem?`${Math.round(hoveredItem.pct*100)}%`:fmtK(total)}
+          </text>
+        </svg>
+      </div>
+      {/* Légende */}
+      <div style={{flex:1}}>
+        {arcs.map((arc,i)=>(
+          <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 10px',borderRadius:10,marginBottom:6,
+            background:hovered===i?arc.color+'12':'transparent',transition:'background 0.15s',cursor:'pointer'}}
+            onMouseEnter={()=>setHovered(i)} onMouseLeave={()=>setHovered(null)}>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <div style={{width:10,height:10,borderRadius:'50%',background:arc.color,flexShrink:0}}/>
+              <span style={{fontSize:12,fontWeight:600,color:'#374151'}}>{arc.label}</span>
+            </div>
+            <div style={{textAlign:'right'}}>
+              <span style={{fontSize:12,fontWeight:800,color:arc.color}}>{Math.round(arc.pct*100)}%</span>
+              <span style={{fontSize:11,color:'#94A3B8',marginLeft:4}}>{fmtK(arc.value)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>);
+}
+
 function GraphLine({data,color='#2563EB',label,format}){
   const [tooltip,setTooltip]=useState(null);
   if(!data||data.length<2) return <div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>Ajoute au moins 2 mois pour voir le graphique</div>;
@@ -369,6 +445,362 @@ function RevenusEditor({revenus,onChange}){
   </div>);
 }
 
+
+const QUICK_EMOJIS=['🏖️','🚗','🏠','✈️','💍','📱','🎓','🛋️','🎸','⛵','🏋️','🌍','🎯','💻','🐕','🎹','🏄','🎭','🌴','🏕️'];
+const PROJET_COLORS=['#2563EB','#10B981','#D4A017','#EF4444','#8B5CF6','#F59E0B','#06B6D4','#EC4899'];
+
+function ProjetProgressBar({pct,color='#2563EB',height=7}){
+  const p=Math.min(100,Math.max(0,pct||0));
+  return <div style={{background:'#F1F5F9',borderRadius:99,height,overflow:'hidden'}}>
+    <div style={{width:`${p}%`,height:'100%',background:color,borderRadius:99,transition:'width 0.6s ease'}}/>
+  </div>;
+}
+
+function ProjetCard({projet,onDelete,onMarkDone,onEdit}){
+  const [editing,setEditing]=useState(false);
+  const [montant,setMontant]=useState(String(projet.montant));
+  const [actuel,setActuel]=useState(String(projet.actuel||0));
+  const [horizon,setHorizon]=useState(String(projet.horizon_mois));
+
+  const pct=projet.montant>0?Math.min(100,Math.round((projet.actuel||0)/projet.montant*100)):0;
+  const done=pct>=100;
+  const moisR=projet.effort_mensuel>0?Math.ceil(Math.max(0,projet.montant-(projet.actuel||0))/projet.effort_mensuel):null;
+
+  function saveEdit(){
+    const m=Number(montant)||projet.montant;
+    const h=Number(horizon)||projet.horizon_mois;
+    const a=Number(actuel)||0;
+    const effort=h>0?Math.ceil(m/h):projet.effort_mensuel;
+    onEdit(projet.id,{montant:m,horizon_mois:h,actuel:a,effort_mensuel:effort});
+    setEditing(false);
+  }
+
+  if(editing){
+    return(
+      <div className="fade-in" style={{background:'#fff',borderRadius:14,padding:'14px',marginBottom:10,boxShadow:'0 2px 10px rgba(11,20,55,0.07)',border:`1.5px solid ${projet.color}`}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10}}>
+          <span style={{fontSize:18}}>{projet.emoji}</span>
+          <p style={{fontWeight:700,fontSize:13,color:'#0F172A'}}>{projet.nom}</p>
+        </div>
+        <div style={{display:'flex',gap:8,marginBottom:8}}>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,fontWeight:700,color:'#94A3B8',display:'block',marginBottom:3}}>Déjà épargné</label>
+            <input type="number" value={actuel} onChange={e=>setActuel(e.target.value)} style={{width:'100%',padding:'8px 10px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit'}}/>
+          </div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,fontWeight:700,color:'#94A3B8',display:'block',marginBottom:3}}>Montant cible</label>
+            <input type="number" value={montant} onChange={e=>setMontant(e.target.value)} style={{width:'100%',padding:'8px 10px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit'}}/>
+          </div>
+        </div>
+        <div style={{marginBottom:10}}>
+          <label style={{fontSize:10,fontWeight:700,color:'#94A3B8',display:'block',marginBottom:3}}>Horizon (mois)</label>
+          <input type="number" value={horizon} onChange={e=>setHorizon(e.target.value)} style={{width:'100%',padding:'8px 10px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit'}}/>
+        </div>
+        <div style={{display:'flex',gap:6}}>
+          <button onClick={saveEdit} style={{flex:1,padding:'8px',borderRadius:8,border:'none',fontWeight:700,fontSize:12,cursor:'pointer',background:'#0B1437',color:'white'}}>✓ Enregistrer</button>
+          <button onClick={()=>setEditing(false)} style={{flex:1,padding:'8px',borderRadius:8,border:'1px solid #E5E7EB',fontWeight:600,fontSize:12,cursor:'pointer',background:'transparent',color:'#64748B'}}>Annuler</button>
+        </div>
+      </div>
+    );
+  }
+
+  return(
+    <div className="fade-in" style={{background:'#fff',borderRadius:14,padding:'14px',marginBottom:10,
+      boxShadow:'0 2px 10px rgba(11,20,55,0.07)',border:`1.5px solid ${done?'#10B981':projet.color+'30'}`}}>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+        <div style={{width:38,height:38,borderRadius:10,background:projet.color+'18',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{projet.emoji}</div>
+        <div style={{flex:1}}>
+          <p style={{fontWeight:700,fontSize:13,color:'#0F172A'}}>{projet.nom}</p>
+          <p style={{fontSize:11,color:'#94A3B8',marginTop:1}}>{done?'🎉 Objectif atteint !':(moisR?`${fmt(projet.effort_mensuel)}/mois · ${moisR} mois restants`:`${fmt(projet.effort_mensuel)}/mois`)}</p>
+        </div>
+        <div style={{textAlign:'right'}}>
+          <p style={{fontWeight:800,fontSize:14,color:projet.color}}>{fmt(projet.actuel||0)}</p>
+          <p style={{fontSize:11,color:'#94A3B8'}}>/ {fmt(projet.montant)}</p>
+        </div>
+      </div>
+      <ProjetProgressBar pct={pct} color={projet.color}/>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:8}}>
+        <span style={{fontSize:11,fontWeight:700,color:projet.color}}>{pct}%</span>
+        <div style={{display:'flex',gap:6}}>
+          {done&&<button onClick={()=>onMarkDone(projet)} style={{fontSize:12,fontWeight:700,padding:'5px 10px',borderRadius:8,background:'linear-gradient(135deg,#10B981,#059669)',color:'white',border:'none',cursor:'pointer'}}>✓ Clôturer</button>}
+          <button onClick={()=>setEditing(true)} style={{fontSize:12,fontWeight:700,padding:'5px 10px',borderRadius:8,background:'#EFF6FF',color:'#2563EB',border:'1px solid #BFDBFE',cursor:'pointer'}}>✎ Modifier</button>
+          <button onClick={()=>onDelete(projet.id)} style={{fontSize:12,fontWeight:700,padding:'5px 10px',borderRadius:8,background:'#FEF2F2',color:'#B91C1C',border:'1px solid #FECACA',cursor:'pointer'}}>✕</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NouveauProjetForm({revenusLibres,onSave,onCancel}){
+  const [nom,setNom]=useState('');
+  const [montant,setMontant]=useState('');
+  const [horizon,setHorizon]=useState('');
+  const [unit,setUnit]=useState('mois');
+  const [emoji,setEmoji]=useState('🏖️');
+  const [emojiCustom,setEmojiCustom]=useState('');
+  const [showPicker,setShowPicker]=useState(false);
+  const [color,setColor]=useState('#2563EB');
+  const [type,setType]=useState('epargne');
+
+  const horizonMois=unit==='ans'?(Number(horizon)||0)*12:(Number(horizon)||0);
+  const effortMensuel=horizonMois>0?Math.ceil((Number(montant)||0)/horizonMois):0;
+  const tooMuch=effortMensuel>revenusLibres&&revenusLibres>0;
+  const displayEmoji=emojiCustom.trim()||emoji;
+
+  function handleSave(){
+    if(!nom.trim()||!montant||!horizonMois) return;
+    onSave({nom:nom.trim(),montant:Number(montant),effort_mensuel:effortMensuel,horizon_mois:horizonMois,emoji:displayEmoji,color,type,actuel:0});
+  }
+
+  return(
+    <div className="pop" style={{background:'#fff',borderRadius:16,padding:'20px',boxShadow:'0 8px 32px rgba(11,20,55,0.14)',marginBottom:10}}>
+      <h3 style={{fontSize:15,fontWeight:800,color:'#0F172A',marginBottom:16}}>Nouveau projet</h3>
+
+      <div style={{display:'flex',gap:8,marginBottom:14}}>
+        {[['epargne','🏦 Épargne'],['invest','📈 Investissement']].map(([k,l])=>(
+          <button key={k} onClick={()=>setType(k)} style={{flex:1,padding:'9px 0',borderRadius:10,border:`1.5px solid ${type===k?'#2563EB':'#E5E7EB'}`,background:type===k?'#EFF6FF':'#F8FAFC',color:type===k?'#2563EB':'#64748B',fontSize:12,fontWeight:700,cursor:'pointer'}}>{l}</button>
+        ))}
+      </div>
+
+      <InputField label="Nom du projet" value={nom} onChange={setNom} placeholder="Ex : Vacances, Voiture…"/>
+
+      <div style={{marginBottom:14}}>
+        <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>Icône</label>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          <button onClick={()=>setShowPicker(!showPicker)} style={{width:44,height:44,borderRadius:10,border:'1.5px solid #E5E7EB',background:'#F8FAFC',fontSize:20,cursor:'pointer',flexShrink:0}}>{displayEmoji}</button>
+          <input value={emojiCustom} onChange={e=>setEmojiCustom(e.target.value)} placeholder="Ou tape un émoji ici..."
+            style={{flex:1,padding:'11px 14px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:18,background:'#F8FAFC'}}
+            onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+        </div>
+        {showPicker&&<div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:8,padding:10,background:'#F8FAFC',borderRadius:12,border:'1px solid #E5E7EB'}}>
+          {QUICK_EMOJIS.map(e=><button key={e} onClick={()=>{setEmoji(e);setEmojiCustom('');setShowPicker(false);}} style={{fontSize:20,background:'none',border:'none',cursor:'pointer',padding:4,borderRadius:6}}>{e}</button>)}
+        </div>}
+      </div>
+
+      <div style={{marginBottom:14}}>
+        <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>Couleur</label>
+        <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+          {PROJET_COLORS.map(c=><button key={c} onClick={()=>setColor(c)} style={{width:28,height:28,borderRadius:8,background:c,border:color===c?'3px solid #0F172A':'2px solid transparent',cursor:'pointer'}}/>)}
+        </div>
+      </div>
+
+      <InputField label="Montant cible" value={montant} onChange={setMontant} type="number" suffix="€"/>
+
+      <div style={{marginBottom:14}}>
+        <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>Horizon</label>
+        <div style={{display:'flex',gap:8}}>
+          <input type="number" value={horizon} onChange={e=>setHorizon(e.target.value)} placeholder="0" min="0"
+            style={{flex:1,minWidth:0,padding:'12px 14px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:14,background:'#F8FAFC',fontFamily:'inherit'}}
+            onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+          <div style={{display:'flex',borderRadius:10,border:'1.5px solid #E5E7EB',overflow:'hidden',width:90,flexShrink:0}}>
+            {['mois','ans'].map(u=>(
+              <button key={u} onClick={()=>setUnit(u)} style={{width:'50%',padding:'12px 0',border:'none',cursor:'pointer',fontSize:12,fontWeight:700,textAlign:'center',
+                background:unit===u?'#2563EB':'#F8FAFC',color:unit===u?'#fff':'#64748B',transition:'all 0.15s'}}>
+                {u==='mois'?'Mois':'Ans'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {effortMensuel>0&&<div style={{marginBottom:14,borderRadius:12,padding:'12px 14px',
+        background:tooMuch?'#FEF2F2':'#EFF6FF',border:`1.5px solid ${tooMuch?'#FECACA':'#BFDBFE'}`}}>
+        {tooMuch?(
+          <>
+            <p style={{fontWeight:700,fontSize:13,color:'#B91C1C',marginBottom:4}}>⚠️ Objectif trop ambitieux</p>
+            <p style={{fontSize:12,color:'#B91C1C',lineHeight:1.5}}>Ce projet nécessite <strong>{fmt(effortMensuel)}/mois</strong> mais il ne reste que <strong>{fmt(Math.max(0,revenusLibres))}</strong> disponibles. Augmente ton allocation épargne ou étale l'horizon.</p>
+          </>
+        ):(
+          <>
+            <p style={{fontWeight:600,fontSize:12,color:'#1E40AF',marginBottom:2}}>Effort mensuel estimé</p>
+            <p style={{fontWeight:800,fontSize:18,color:'#2563EB'}}>{fmt(effortMensuel)}/mois</p>
+            <p style={{fontSize:11,color:'#64748B',marginTop:2}}>sur {horizonMois} mois · {fmt(Math.max(0,revenusLibres-effortMensuel))} libres après</p>
+          </>
+        )}
+      </div>}
+
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={handleSave} disabled={!nom.trim()||!montant||!horizonMois||tooMuch}
+          style={{flex:1,padding:'12px',borderRadius:10,border:'none',fontWeight:700,fontSize:14,cursor:'pointer',
+            background:(!nom.trim()||!montant||!horizonMois||tooMuch)?'#E5E7EB':'linear-gradient(135deg,#2563EB,#0B1437)',
+            color:(!nom.trim()||!montant||!horizonMois||tooMuch)?'#94A3B8':'white',transition:'all 0.15s'}}>
+          ✓ Ajouter
+        </button>
+        <button onClick={onCancel} style={{flex:1,padding:'12px',borderRadius:10,border:'none',fontWeight:700,fontSize:14,cursor:'pointer',background:'rgba(11,20,55,0.05)',color:'#374151'}}>
+          Annuler
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+function ComptesEditor({comptes,onChange}){
+  const [showAdd,setShowAdd]=useState(false);
+  const [newNom,setNewNom]=useState('');
+  const [newMontant,setNewMontant]=useState('');
+  const total=comptes.reduce((s,c)=>s+(c.montant||0),0);
+
+  function add(){
+    const m=parseAmount(newMontant);
+    if(!newNom.trim()||!m) return;
+    onChange([...comptes,{nom:newNom.trim(),montant:m}]);
+    setNewNom('');setNewMontant('');setShowAdd(false);
+  }
+  function remove(i){onChange(comptes.filter((_,idx)=>idx!==i));}
+  function update(i,val){
+    const u=[...comptes];u[i]={...u[i],montant:parseAmount(val)||0};onChange(u);
+  }
+
+  return(<div>
+    {comptes.map((c,i)=>(
+      <div key={i} style={{display:'flex',alignItems:'center',gap:8,marginBottom:8,background:'#F7F9FC',borderRadius:10,padding:'10px 12px',border:'1px solid rgba(11,20,55,0.05)'}}>
+        <span style={{flex:1,fontSize:13,fontWeight:600,color:'#1E293B'}}>{c.nom}</span>
+        <div style={{position:'relative',width:110}}>
+          <input type="number" defaultValue={c.montant}
+            onBlur={e=>update(i,e.target.value)}
+            style={{width:'100%',padding:'6px 28px 6px 8px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit',background:'#fff'}}
+            onFocus={e=>e.target.style.borderColor='#2563EB'} />
+          <span style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',fontSize:11,color:'#94A3B8',fontWeight:600}}>€</span>
+        </div>
+        <button onClick={()=>remove(i)} style={{background:'none',border:'none',color:'#D1D5DB',cursor:'pointer',fontSize:18,padding:'0 2px',lineHeight:1}}>×</button>
+      </div>
+    ))}
+    {comptes.length>0&&<div style={{display:'flex',justifyContent:'space-between',padding:'8px 12px',background:'#EFF6FF',borderRadius:10,marginBottom:10,border:'1px solid #BFDBFE'}}>
+      <span style={{fontSize:13,fontWeight:600,color:'#1E40AF'}}>Total comptes courants</span>
+      <span style={{fontSize:13,fontWeight:800,color:'#2563EB'}}>{fmt(total)}</span>
+    </div>}
+    {showAdd?(
+      <div style={{background:'#F7F9FC',border:'1.5px solid #E5E7EB',borderRadius:12,padding:'12px',marginBottom:8}}>
+        <div style={{display:'flex',gap:8,marginBottom:8}}>
+          <input value={newNom} onChange={e=>setNewNom(e.target.value)} placeholder="Ex : Compte principal"
+            style={{flex:1,padding:'9px 12px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit'}}
+            onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+          <div style={{position:'relative',width:110}}>
+            <input type="number" value={newMontant} onChange={e=>setNewMontant(e.target.value)} placeholder="0"
+              style={{width:'100%',padding:'9px 28px 9px 8px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit'}}
+              onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+            <span style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',fontSize:11,color:'#94A3B8'}}>€</span>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={add} disabled={!newNom.trim()||!newMontant}
+            style={{flex:1,padding:'8px',borderRadius:8,border:'none',fontWeight:700,fontSize:12,cursor:'pointer',background:(!newNom.trim()||!newMontant)?'#E5E7EB':'#0B1437',color:(!newNom.trim()||!newMontant)?'#94A3B8':'white'}}>✓ Ajouter</button>
+          <button onClick={()=>{setShowAdd(false);setNewNom('');setNewMontant('');}}
+            style={{flex:1,padding:'8px',borderRadius:8,border:'1px solid #E5E7EB',fontWeight:600,fontSize:12,cursor:'pointer',background:'transparent',color:'#64748B'}}>Annuler</button>
+        </div>
+      </div>
+    ):(
+      <button onClick={()=>setShowAdd(true)} style={{width:'100%',padding:'9px',border:'2px dashed #CBD5E1',borderRadius:10,background:'transparent',color:'#2563EB',fontSize:12,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+        <span style={{fontSize:16}}>+</span> Ajouter un compte
+      </button>
+    )}
+  </div>);
+}
+
+
+function InvestissementsEditor({investissements,onChange}){
+  const [showAdd,setShowAdd]=useState(false);
+  const [newNom,setNewNom]=useState('');
+  const [newInvesti,setNewInvesti]=useState('');
+  const [newValeur,setNewValeur]=useState('');
+  const totalInvesti=investissements.reduce((s,i)=>s+(i.investi||0),0);
+  const totalValeur=investissements.reduce((s,i)=>s+(i.valeur!=null?i.valeur:i.investi||0),0);
+  const pv=totalValeur-totalInvesti;
+
+  function add(){
+    const inv=parseAmount(newInvesti);
+    if(!newNom.trim()||!inv) return;
+    const val=newValeur?parseAmount(newValeur):inv;
+    onChange([...investissements,{nom:newNom.trim(),investi:inv,valeur:val}]);
+    setNewNom('');setNewInvesti('');setNewValeur('');setShowAdd(false);
+  }
+  function remove(i){onChange(investissements.filter((_,idx)=>idx!==i));}
+  function updateInvesti(i,val){const u=[...investissements];u[i]={...u[i],investi:parseAmount(val)||0};onChange(u);}
+  function updateValeur(i,val){const u=[...investissements];u[i]={...u[i],valeur:parseAmount(val)||0};onChange(u);}
+
+  return(<div>
+    {investissements.map((inv,i)=>(
+      <div key={i} style={{background:'#F7F9FC',borderRadius:12,marginBottom:10,padding:'12px',border:'1px solid rgba(11,20,55,0.05)'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+          <span style={{fontSize:13,fontWeight:700,color:'#1E293B'}}>{inv.nom}</span>
+          <button onClick={()=>remove(i)} style={{background:'none',border:'none',color:'#D1D5DB',cursor:'pointer',fontSize:18,lineHeight:1}}>×</button>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,fontWeight:700,color:'#94A3B8',display:'block',marginBottom:3,textTransform:'uppercase'}}>Investi (hors +/-)</label>
+            <div style={{position:'relative'}}>
+              <input type="number" defaultValue={inv.investi}
+                onBlur={e=>updateInvesti(i,e.target.value)}
+                style={{width:'100%',padding:'7px 28px 7px 8px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit',background:'#fff'}}
+                onFocus={e=>e.target.style.borderColor='#2563EB'} />
+              <span style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',fontSize:11,color:'#94A3B8'}}>€</span>
+            </div>
+          </div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,fontWeight:700,color:'#94A3B8',display:'block',marginBottom:3,textTransform:'uppercase'}}>Valeur actuelle</label>
+            <div style={{position:'relative'}}>
+              <input type="number" defaultValue={inv.valeur!=null?inv.valeur:inv.investi}
+                onBlur={e=>updateValeur(i,e.target.value)}
+                style={{width:'100%',padding:'7px 28px 7px 8px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit',background:'#fff'}}
+                onFocus={e=>e.target.style.borderColor='#D4A017'} />
+              <span style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',fontSize:11,color:'#94A3B8'}}>€</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    ))}
+    {investissements.length>0&&<div style={{display:'flex',justifyContent:'space-between',padding:'10px 12px',background:'#FEF3C7',borderRadius:10,marginBottom:10,border:'1px solid #FDE68A'}}>
+      <div>
+        <p style={{fontSize:11,fontWeight:600,color:'#92400E',marginBottom:2}}>Total investi (hors +/-)</p>
+        <p style={{fontSize:13,fontWeight:800,color:'#D4A017'}}>{fmt(totalInvesti)}</p>
+      </div>
+      <div style={{textAlign:'right'}}>
+        <p style={{fontSize:11,fontWeight:600,color:'#92400E',marginBottom:2}}>Valeur actuelle</p>
+        <p style={{fontSize:13,fontWeight:800,color:pv>=0?'#10B981':'#EF4444'}}>{fmt(totalValeur)} {pv!==0&&`(${pv>0?'+':''}${fmt(pv)})`}</p>
+      </div>
+    </div>}
+    {showAdd?(
+      <div style={{background:'#F7F9FC',border:'1.5px solid #E5E7EB',borderRadius:12,padding:'12px',marginBottom:8}}>
+        <input value={newNom} onChange={e=>setNewNom(e.target.value)} placeholder="Ex : PEA, CTO, Crypto…"
+          style={{width:'100%',padding:'9px 12px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit',marginBottom:8}}
+          onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+        <div style={{display:'flex',gap:8,marginBottom:8}}>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,fontWeight:700,color:'#94A3B8',display:'block',marginBottom:3,textTransform:'uppercase'}}>Investi (hors +/-)</label>
+            <div style={{position:'relative'}}>
+              <input type="number" value={newInvesti} onChange={e=>setNewInvesti(e.target.value)} placeholder="0"
+                style={{width:'100%',padding:'8px 28px 8px 8px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit'}}
+                onFocus={e=>e.target.style.borderColor='#2563EB'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+              <span style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',fontSize:11,color:'#94A3B8'}}>€</span>
+            </div>
+          </div>
+          <div style={{flex:1}}>
+            <label style={{fontSize:10,fontWeight:700,color:'#94A3B8',display:'block',marginBottom:3,textTransform:'uppercase'}}>Valeur actuelle</label>
+            <div style={{position:'relative'}}>
+              <input type="number" value={newValeur} onChange={e=>setNewValeur(e.target.value)} placeholder="= investi si vide"
+                style={{width:'100%',padding:'8px 28px 8px 8px',border:'1.5px solid #E5E7EB',borderRadius:8,fontSize:13,fontFamily:'inherit'}}
+                onFocus={e=>e.target.style.borderColor='#D4A017'} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+              <span style={{position:'absolute',right:8,top:'50%',transform:'translateY(-50%)',fontSize:11,color:'#94A3B8'}}>€</span>
+            </div>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button onClick={add} disabled={!newNom.trim()||!newInvesti}
+            style={{flex:1,padding:'8px',borderRadius:8,border:'none',fontWeight:700,fontSize:12,cursor:'pointer',
+              background:(!newNom.trim()||!newInvesti)?'#E5E7EB':'#0B1437',color:(!newNom.trim()||!newInvesti)?'#94A3B8':'white'}}>✓ Ajouter</button>
+          <button onClick={()=>{setShowAdd(false);setNewNom('');setNewInvesti('');setNewValeur('');}}
+            style={{flex:1,padding:'8px',borderRadius:8,border:'1px solid #E5E7EB',fontWeight:600,fontSize:12,cursor:'pointer',background:'transparent',color:'#64748B'}}>Annuler</button>
+        </div>
+      </div>
+    ):(
+      <button onClick={()=>setShowAdd(true)} style={{width:'100%',padding:'9px',border:'2px dashed #FDE68A',borderRadius:10,background:'transparent',color:'#D4A017',fontSize:12,fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+        <span style={{fontSize:16}}>+</span> Ajouter un investissement
+      </button>
+    )}
+  </div>);
+}
+
 const CATS_CHARGES=['Loyer','Énergie','Eau','Internet','Téléphone','Assurance','Crédit','Transport','Alimentation','Santé','Abonnements','Autre'];
 function ChargesEditor({charges,onChange,revenu}){
   const [showAdd,setShowAdd]=useState(false);
@@ -443,14 +875,21 @@ function ChargesEditor({charges,onChange,revenu}){
   </div>);
 }
 
-function BilanDetail({bilan,params,prevBilan,onClose,onUpdate,onDelete}){
-  const [cc,setCc]=useState(String(bilan.compte_courant));
-  const [ep,setEp]=useState(String(bilan.epargne));
-  const [pl,setPl]=useState(String(bilan.placement));
+function BilanDetail({bilan,params,projets,prevBilan,onClose,onUpdate,onDelete}){
+  const initComptes=bilan.comptes_detail?JSON.parse(bilan.comptes_detail):[{nom:'Compte courant',montant:bilan.compte_courant}];
+  const [comptes,setComptes]=useState(initComptes);
+  const initEpargnes=bilan.epargne_detail?JSON.parse(bilan.epargne_detail):[{nom:'Épargne',montant:bilan.epargne}];
+  const [epargnes,setEpargnes]=useState(initEpargnes);
+  const initInvests=bilan.investissements_detail?JSON.parse(bilan.investissements_detail):[{nom:'Investissements',investi:bilan.placement,valeur:bilan.placement_valeur!=null?bilan.placement_valeur:bilan.placement}];
+  const [investissements,setInvestissements]=useState(initInvests);
   const [saving,setSaving]=useState(false);const [deleting,setDeleting]=useState(false);
-  const cur={compte_courant:parseAmount(cc),epargne:parseAmount(ep),placement:parseAmount(pl),mois:bilan.mois};
+  const totalCC=comptes.reduce((s,c)=>s+(c.montant||0),0);
+  const totalEp=epargnes.reduce((s,e)=>s+(e.montant||0),0);
+  const totalPl=investissements.reduce((s,i)=>s+(i.investi||0),0);
+  const totalPlValeur=investissements.reduce((s,i)=>s+(i.valeur!=null?i.valeur:i.investi||0),0);
+  const cur={compte_courant:totalCC,epargne:totalEp,placement:totalPl,placement_valeur:totalPlValeur,mois:bilan.mois};
   const {score,details,patrimoine}=calcScore(cur,params,prevBilan);
-  async function save(){setSaving(true);await supabase.from('bilans').update({compte_courant:parseAmount(cc),epargne:parseAmount(ep),placement:parseAmount(pl)}).eq('id',bilan.id);setSaving(false);onUpdate();}
+  async function save(){setSaving(true);await supabase.from('bilans').update({compte_courant:totalCC,comptes_detail:JSON.stringify(comptes),epargne:totalEp,epargne_detail:JSON.stringify(epargnes),placement:totalPl,placement_valeur:totalPlValeur,investissements_detail:JSON.stringify(investissements)}).eq('id',bilan.id);setSaving(false);onUpdate();}
   async function del(){setDeleting(true);await supabase.from('bilans').delete().eq('id',bilan.id);setDeleting(false);onDelete();}
   return(<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:200,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
     <div className="pop" style={{background:'#F0F3FA',borderRadius:'20px 20px 0 0',width:'100%',maxWidth:680,maxHeight:'90vh',overflow:'auto',paddingBottom:32}}>
@@ -465,11 +904,40 @@ function BilanDetail({bilan,params,prevBilan,onClose,onUpdate,onDelete}){
         </Card>
         <Card style={{marginBottom:14}}>
           <h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:14,textTransform:'uppercase',letterSpacing:'0.5px'}}>💳 Modifier les soldes</h3>
-          <InputField label="Compte courant" value={cc} onChange={setCc} type="number" suffix="€"/>
-          <InputField label="Épargne (total)" value={ep} onChange={setEp} type="number" suffix="€"/>
-          <InputField label="Placements (total)" value={pl} onChange={setPl} type="number" suffix="€"/>
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>Comptes courants</label>
+            <ComptesEditor comptes={comptes} onChange={setComptes}/>
+          </div>
+          <div style={{marginBottom:14}}>
+            <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>Comptes épargne</label>
+            <ComptesEditor comptes={epargnes} onChange={setEpargnes}/>
+          </div>
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>📈 Investissements</label>
+            <InvestissementsEditor investissements={investissements} onChange={setInvestissements}/>
+          </div>
           <Btn onClick={save} disabled={saving} style={{width:'100%'}} variant="gold">{saving?'...':'✅ Enregistrer les modifications'}</Btn>
         </Card>
+        {projets&&projets.length>0&&<Card style={{marginBottom:14}}>
+          <h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.5px'}}>🎯 Mes projets</h3>
+          {projets.map(p=>{
+            const pct=p.montant>0?Math.min(100,Math.round((p.actuel||0)/p.montant*100)):0;
+            return(
+              <div key={p.id} style={{marginBottom:12}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
+                  <div style={{display:'flex',alignItems:'center',gap:7}}>
+                    <span style={{fontSize:15}}>{p.emoji}</span>
+                    <span style={{fontSize:12,fontWeight:700,color:'#0F172A'}}>{p.nom}</span>
+                  </div>
+                  <span style={{fontSize:11,color:'#94A3B8'}}>{fmt(p.actuel||0)} / {fmt(p.montant)}</span>
+                </div>
+                <div style={{background:'#F1F5F9',borderRadius:99,height:6,overflow:'hidden'}}>
+                  <div style={{width:`${pct}%`,height:'100%',background:p.color,borderRadius:99}}/>
+                </div>
+              </div>
+            );
+          })}
+        </Card>}
         <Card style={{marginBottom:14}}>
           <h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:12,textTransform:'uppercase',letterSpacing:'0.5px'}}>📊 Détail du score</h3>
           <div style={{display:'flex',flexDirection:'column',gap:6}}>
@@ -759,7 +1227,7 @@ function FeedbackBlock({userId}){
   );
 }
 
-function ParamsScreen({user,params,onSave,onBack}){
+function ParamsScreen({user,params,projets,onUpdateProjets,onSave,onBack}){
   const toP=(m,r)=>r>0?String(Math.round((m||0)/r*100)):'';
   const [prenom,setPrenom]=useState(params?.prenom||'');
   const [revenus,setRevenus]=useState(parseCharges(params?.revenus_detail));
@@ -774,6 +1242,8 @@ function ParamsScreen({user,params,onSave,onBack}){
   const [saving,setSaving]=useState(false);
   const [tab,setTab]=useState('budget');
   const [showModal,setShowModal]=useState(false);
+  const [showProjetForm,setShowProjetForm]=useState(false);
+  const [doneModal,setDoneModal]=useState(null);
 
   const rev=revenus.reduce((s,r)=>s+r.montant,0);
   const totalC=charges.reduce((s,c)=>s+c.montant,0);
@@ -790,6 +1260,26 @@ function ParamsScreen({user,params,onSave,onBack}){
   const maxPlaisir=Math.max(0,mPlaisir+remainderEuros);
   const maxEpargne=Math.max(0,mEpargne+remainderEuros);
   const maxInvest=Math.max(0,mInvest+remainderEuros);
+
+  // Fonctions CRUD projets
+  async function addProjet(p){
+    await supabase.from('projets').insert({user_id:user.id,...p,actuel:0,accompli:false});
+    setShowProjetForm(false);
+    onUpdateProjets();
+  }
+  async function deleteProjet(id){
+    await supabase.from('projets').delete().eq('id',id);
+    onUpdateProjets();
+  }
+  async function markDoneProjet(p){
+    await supabase.from('projets').update({accompli:true}).eq('id',p.id);
+    setDoneModal(p);
+    onUpdateProjets();
+  }
+  async function editProjet(id,updates){
+    await supabase.from('projets').update(updates).eq('id',id);
+    onUpdateProjets();
+  }
 
   // update() garantit la mise à jour de la ligne existante
   async function save(applyToHistory){
@@ -816,6 +1306,21 @@ function ParamsScreen({user,params,onSave,onBack}){
   }
 
   return(<div style={{minHeight:'100vh',background:'#F0F3FA',paddingBottom:40}}>
+    {/* Modal projet accompli */}
+    {doneModal&&<div style={{position:'fixed',inset:0,background:'rgba(11,20,55,0.75)',display:'flex',alignItems:'center',justifyContent:'center',padding:20,zIndex:500}}>
+      <div className="pop" style={{background:'#fff',borderRadius:20,padding:'28px 22px',textAlign:'center',maxWidth:300,width:'100%'}}>
+        <div style={{fontSize:52,marginBottom:10}}>🎉</div>
+        <h2 style={{fontSize:18,fontWeight:800,color:'#0F172A',marginBottom:8}}>Projet accompli !</h2>
+        <p style={{fontSize:13,color:'#64748B',marginBottom:10}}><strong>{doneModal.nom}</strong> est clôturé.</p>
+        <div style={{padding:'10px 14px',background:'#FEF3C7',borderRadius:10,marginBottom:18,border:'1px solid #FDE68A'}}>
+          <p style={{fontSize:12,fontWeight:700,color:'#92400E'}}>🏆 Badge débloqué : Projet accompli !</p>
+          <p style={{fontSize:11,color:'#B45309',marginTop:2}}>{fmt(doneModal.effort_mensuel)}/mois libérés dans ton budget</p>
+        </div>
+        <button onClick={()=>setDoneModal(null)} style={{width:'100%',padding:'12px',borderRadius:10,border:'none',fontWeight:700,fontSize:14,cursor:'pointer',background:'linear-gradient(135deg,#D4A017,#b8860b)',color:'white'}}>
+          Super, merci ! 🚀
+        </button>
+      </div>
+    </div>}
     {/* Modal impact historique */}
     {showModal&&<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',zIndex:300,display:'flex',alignItems:'flex-end',justifyContent:'center'}} onClick={e=>{if(e.target===e.currentTarget)setShowModal(false);}}>
       <div className="pop" style={{background:'#FFFFFF',borderRadius:'20px 20px 0 0',width:'100%',maxWidth:680,padding:'24px 20px 36px'}}>
@@ -861,12 +1366,89 @@ function ParamsScreen({user,params,onSave,onBack}){
             <span style={{fontSize:13,fontWeight:700,color:reste<0?'#B91C1C':reste===0?'#10B981':'#F59E0B'}}>{reste>=0?`${Math.round(reste)}%`:`+${Math.round(-reste)}%`} {rev>0&&`(${fmt(Math.abs(Math.round(reste*rev/100)))})`}</span>
           </div>
         </Card>
+
+        {/* ─── Advisory projets ─── */}
+        {(()=>{
+          const effortEp=projets.filter(p=>p.type==='epargne').reduce((s,p)=>s+p.effort_mensuel,0);
+          const effortInv=projets.filter(p=>p.type==='invest').reduce((s,p)=>s+p.effort_mensuel,0);
+          const warnEp=effortEp>0&&mEpargne<effortEp;
+          const warnInv=effortInv>0&&mInvest<effortInv;
+          if(!warnEp&&!warnInv) return null;
+          return(
+            <div style={{background:'#FFF7ED',borderRadius:14,padding:'14px 16px',marginBottom:14,border:'1.5px solid #FED7AA'}}>
+              <p style={{fontWeight:700,fontSize:13,color:'#C2410C',marginBottom:8}}>💡 Tes projets nécessitent plus</p>
+              {warnEp&&<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                <p style={{fontSize:12,color:'#92400E'}}>🏦 Épargne allouée</p>
+                <div style={{textAlign:'right'}}>
+                  <span style={{fontSize:12,fontWeight:700,color:'#B91C1C'}}>{fmt(mEpargne)}</span>
+                  <span style={{fontSize:11,color:'#94A3B8'}}> / {fmt(effortEp)} requis</span>
+                </div>
+              </div>}
+              {warnInv&&<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                <p style={{fontSize:12,color:'#92400E'}}>📈 Investissement alloué</p>
+                <div style={{textAlign:'right'}}>
+                  <span style={{fontSize:12,fontWeight:700,color:'#B91C1C'}}>{fmt(mInvest)}</span>
+                  <span style={{fontSize:11,color:'#94A3B8'}}> / {fmt(effortInv)} requis</span>
+                </div>
+              </div>}
+              <p style={{fontSize:11,color:'#C2410C',marginTop:6,lineHeight:1.5}}>👆 Augmente tes allocations ci-dessus pour couvrir tes projets.</p>
+            </div>
+          );
+        })()}
       </>}
-      {tab==='objectif'&&<Card style={{marginBottom:14}}>
-        <ObjectifForm emoji="🏦" label="Objectif épargne" montant={objEpM} setMontant={setObjEpM} annees={objEpA} setAnnees={setObjEpA} note="Montant d'épargne de précaution à atteindre"/>
-        <div style={{height:1,background:'#F3F4F6',margin:'4px 0 20px'}}/>
-        <ObjectifForm emoji="📈" label="Objectif investissement" montant={objInvM} setMontant={setObjInvM} annees={objInvA} setAnnees={setObjInvA} note="Montant total à investir sur la durée choisie"/>
-      </Card>}
+      {tab==='objectif'&&<>
+        <Card style={{marginBottom:14}}>
+          <ObjectifForm emoji="🏦" label="Objectif épargne" montant={objEpM} setMontant={setObjEpM} annees={objEpA} setAnnees={setObjEpA} note="Montant d'épargne de précaution à atteindre"/>
+          <div style={{height:1,background:'#F3F4F6',margin:'4px 0 20px'}}/>
+          <ObjectifForm emoji="📈" label="Objectif investissement" montant={objInvM} setMontant={setObjInvM} annees={objInvA} setAnnees={setObjInvA} note="Montant total à investir sur la durée choisie"/>
+        </Card>
+
+        {/* ─── Projets personnalisés ─── */}
+        {(()=>{
+          const effortEp=projets.filter(p=>p.type==='epargne').reduce((s,p)=>s+p.effort_mensuel,0);
+          const effortInv=projets.filter(p=>p.type==='invest').reduce((s,p)=>s+p.effort_mensuel,0);
+          const revenusLibres=Math.max(0,rev-totalC-mEpargne-mInvest);
+          return(<>
+            {/* Résumé impact allocation */}
+            <div style={{background:'linear-gradient(135deg,#0B1437,#1D3086)',borderRadius:16,padding:'16px',marginBottom:14}}>
+              <p style={{color:'rgba(255,255,255,0.5)',fontSize:11,fontWeight:600,textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:10}}>Impact sur ton allocation</p>
+              <div style={{display:'flex',gap:8}}>
+                {[{l:'Projets épargne',v:effortEp,c:'#10B981'},{l:'Projets invest.',v:effortInv,c:'#D4A017'},{l:'Reste libre',v:revenusLibres,c:revenusLibres<=0?'#EF4444':'#64748B'}].map(({l,v,c})=>(
+                  <div key={l} style={{flex:1,background:'rgba(255,255,255,0.08)',borderRadius:10,padding:'8px 10px'}}>
+                    <p style={{color:'rgba(255,255,255,0.4)',fontSize:9,fontWeight:700,textTransform:'uppercase',marginBottom:3,lineHeight:1.3}}>{l}</p>
+                    <p style={{color:c,fontSize:14,fontWeight:800}}>{fmt(v)}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Projets épargne */}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+              <p style={{fontSize:12,fontWeight:700,color:'#64748B',textTransform:'uppercase',letterSpacing:'0.5px'}}>🏦 Projets d'épargne</p>
+              <span style={{fontSize:11,color:'#10B981',fontWeight:700}}>{fmt(effortEp)}/mois</span>
+            </div>
+            {projets.filter(p=>p.type==='epargne').map(p=><ProjetCard key={p.id} projet={p} onDelete={deleteProjet} onMarkDone={markDoneProjet} onEdit={editProjet}/>)}
+            {projets.filter(p=>p.type==='epargne').length===0&&<p style={{textAlign:'center',color:'#94A3B8',fontSize:13,padding:'8px 0 12px'}}>Aucun projet d'épargne — ajoute-en un !</p>}
+
+            {/* Projets invest */}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',margin:'12px 0 8px'}}>
+              <p style={{fontSize:12,fontWeight:700,color:'#64748B',textTransform:'uppercase',letterSpacing:'0.5px'}}>📈 Projets d'investissement</p>
+              <span style={{fontSize:11,color:'#D4A017',fontWeight:700}}>{fmt(effortInv)}/mois</span>
+            </div>
+            {projets.filter(p=>p.type==='invest').map(p=><ProjetCard key={p.id} projet={p} onDelete={deleteProjet} onMarkDone={markDoneProjet} onEdit={editProjet}/>)}
+            {projets.filter(p=>p.type==='invest').length===0&&<p style={{textAlign:'center',color:'#94A3B8',fontSize:13,padding:'8px 0 12px'}}>Aucun projet d'investissement</p>}
+
+            {/* Bouton + formulaire */}
+            {showProjetForm
+              ?<NouveauProjetForm revenusLibres={revenusLibres} onSave={addProjet} onCancel={()=>setShowProjetForm(false)}/>
+              :<button onClick={()=>setShowProjetForm(true)} style={{width:'100%',padding:'12px',border:'2px dashed #CBD5E1',borderRadius:14,background:'transparent',color:'#2563EB',fontSize:14,fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginTop:4}}>
+                <span style={{fontSize:20}}>+</span> Ajouter un projet
+              </button>
+            }
+          </>);
+        })()}
+      </>}
+      <div style={{height:16}}/>
       {reste<0&&tab==='budget'&&<div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'12px 16px',marginBottom:14}}><p style={{color:'#B91C1C',fontSize:13}}>⚠️ Total dépasse 100%. Réduis un poste.</p></div>}
       <Btn onClick={()=>setShowModal(true)} disabled={saving||(tab==='budget'&&reste<-0.5)||rev===0} style={{width:'100%'}} variant="gold">{saving?'...':'✅ Enregistrer'}</Btn>
 
@@ -926,17 +1508,48 @@ function AuthScreen({onConnect}){
   return wrap(<Card><h2 style={{fontSize:18,fontWeight:700,marginBottom:20}}>{mode==='login'?'Connexion':'Créer un compte'}</h2><InputField label="Email" value={email} onChange={setEmail} type="email" placeholder="toi@exemple.fr"/><InputField label="Mot de passe" value={pwd} onChange={setPwd} type="password" placeholder="••••••••"/>{err&&<p style={{color:'#B91C1C',fontSize:13,marginBottom:12,background:'#FEF2F2',padding:'8px 12px',borderRadius:10}}>⚠️ {err}</p>}<Btn onClick={submit} disabled={loading} style={{width:'100%'}}>{loading?'...':(mode==='login'?'Se connecter':"S'inscrire")}</Btn>{mode==='login'&&<button onClick={()=>{setMode('forgot');setErr('');}} style={{display:'block',margin:'12px auto 0',background:'none',border:'none',color:'#2563EB',fontSize:13,cursor:'pointer',fontWeight:600}}>Mot de passe oublié ?</button>}<button onClick={()=>{setMode(mode==='login'?'signup':'login');setErr('');}} style={{display:'block',margin:'10px auto 0',background:'none',border:'none',color:'#64748B',fontSize:13,cursor:'pointer'}}>{mode==='login'?"Pas encore de compte ? S'inscrire":'Déjà un compte ? Se connecter'}</button></Card>);
 }
 
-function AddMonthScreen({user,bilans,params,onSave,onBack}){
+function AddMonthScreen({user,bilans,params,projets,onSave,onBack}){
   const now=new Date();
   const [mois,setMois]=useState(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
-  const [cc,setCc]=useState('');const [ep,setEp]=useState('');const [pl,setPl]=useState('');
+  // Pré-charger depuis params si config sauvegardée
+  const initComptes=params?.comptes_config?JSON.parse(params.comptes_config).map(n=>({nom:n,montant:0})):[{nom:'Compte courant',montant:0}];
+  const initEpargnes=params?.epargnes_config?JSON.parse(params.epargnes_config).map(n=>({nom:n,montant:0})):[{nom:'Livret A',montant:0}];
+  const initInvests=params?.investissements_config?JSON.parse(params.investissements_config).map(n=>({nom:n,investi:0,valeur:0})):[{nom:'PEA',investi:0,valeur:0}];
+  const [comptes,setComptes]=useState(initComptes);
+  const [epargnes,setEpargnes]=useState(initEpargnes);
+  const [investissements,setInvestissements]=useState(initInvests);
   const [saving,setSaving]=useState(false);
+  const [showEpDetails,setShowEpDetails]=useState(false);
+  const [showPlDetails,setShowPlDetails]=useState(false);
+  const [repartEp,setRepartEp]=useState({});
+  const [repartPl,setRepartPl]=useState({});
   const sorted=[...bilans].sort((a,b)=>a.mois.localeCompare(b.mois));
   const prev=sorted.at(-1);
-  const cur={compte_courant:parseAmount(cc),epargne:parseAmount(ep),placement:parseAmount(pl),mois};
+  const totalCC=comptes.reduce((s,c)=>s+(c.montant||0),0);
+  const totalEp=epargnes.reduce((s,e)=>s+(e.montant||0),0);
+  const totalPl=investissements.reduce((s,i)=>s+(i.investi||0),0);
+  const totalPlValeur=investissements.reduce((s,i)=>s+(i.valeur!=null?i.valeur:i.investi||0),0);
+  const cur={compte_courant:totalCC,epargne:totalEp,placement:totalPl,placement_valeur:totalPlValeur,mois};
   const{score,details,patrimoine,deltaEp,deltaPl}=calcScore(cur,params,prev);
-  const hasValues=cc||ep||pl;
-  async function save(){setSaving(true);await supabase.from('bilans').insert({user_id:user.id,mois,compte_courant:parseAmount(cc),epargne:parseAmount(ep),placement:parseAmount(pl),objectif_epargne:params?.objectif_epargne||0,objectif_investissement:params?.objectif_investissement||0});setSaving(false);onSave();}
+  const hasValues=totalCC>0||totalEp>0||totalPl>0;
+  async function save(){
+    setSaving(true);
+    await supabase.from('bilans').insert({user_id:user.id,mois,compte_courant:totalCC,comptes_detail:JSON.stringify(comptes),epargne:totalEp,epargne_detail:JSON.stringify(epargnes),placement:totalPl,placement_valeur:totalPlValeur,investissements_detail:JSON.stringify(investissements),objectif_epargne:params?.objectif_epargne||0,objectif_investissement:params?.objectif_investissement||0});
+    // Sauvegarder la config des comptes dans params pour le prochain bilan
+    await supabase.from('params').update({
+      comptes_config:JSON.stringify(comptes.map(c=>c.nom)),
+      epargnes_config:JSON.stringify(epargnes.map(e=>e.nom)),
+      investissements_config:JSON.stringify(investissements.map(i=>i.nom))
+    }).eq('user_id',user.id);
+    // Mettre à jour actuel de chaque projet selon la répartition saisie
+    const updates=[...Object.entries(repartEp),...Object.entries(repartPl)];
+    for(const [id,val] of updates){
+      const amt=Number(val)||0;if(!amt)continue;
+      const proj=projets.find(p=>String(p.id)===String(id));
+      if(proj) await supabase.from('projets').update({actuel:(proj.actuel||0)+amt}).eq('id',id);
+    }
+    setSaving(false);onSave();
+  }
   return(<div style={{minHeight:'100vh',background:'#F0F3FA',paddingBottom:40}}>
     <div style={{background:'#0B1437',padding:'20px 20px 28px',position:'sticky',top:0,zIndex:10}}>
       <div style={{display:'flex',alignItems:'center',gap:12}}>
@@ -959,9 +1572,90 @@ function AddMonthScreen({user,bilans,params,onSave,onBack}){
       </Card>
       <Card style={{marginBottom:14}}>
         <h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:14,textTransform:'uppercase',letterSpacing:'0.5px'}}>💳 Mes soldes actuels</h3>
-        <InputField label="Compte courant" value={cc} onChange={setCc} type="number" suffix="€" note="Solde total"/>
-        <InputField label="Épargne (total)" value={ep} onChange={setEp} type="number" suffix="€" note="Livret A, LEP…"/>
-        <InputField label="Placements (total)" value={pl} onChange={setPl} type="number" suffix="€" note="PEA, crypto…"/>
+        <div style={{marginBottom:14}}>
+          <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>💳 Comptes courants</label>
+          <ComptesEditor comptes={comptes} onChange={setComptes}/>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>🏦 Comptes épargne</label>
+          <ComptesEditor comptes={epargnes} onChange={v=>{setEpargnes(v);setRepartEp({});}}/>
+        </div>
+        {projets.filter(p=>p.type==='epargne').length>0&&totalEp>0&&(
+          <div style={{marginTop:-8,marginBottom:12}}>
+            <button onClick={()=>setShowEpDetails(!showEpDetails)}
+              style={{fontSize:11,fontWeight:600,color:'#64748B',background:'none',border:'none',cursor:'pointer',padding:'2px 0',display:'flex',alignItems:'center',gap:4}}>
+              <span style={{fontSize:12,display:'inline-block',transform:showEpDetails?'rotate(90deg)':'rotate(0deg)',transition:'transform 0.2s'}}>›</span>
+              {showEpDetails?'Masquer les détails':'Répartir entre mes projets'}
+            </button>
+            {showEpDetails&&(
+              <div className="fade-in" style={{marginTop:8,padding:'14px',background:'#F8FAFC',borderRadius:12,border:'1px solid #E5E7EB'}}>
+                <p style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>Épargne à répartir : <strong style={{color:'#0F172A'}}>{fmt(totalEp)}</strong></p>
+                {projets.filter(p=>p.type==='epargne').map(p=>(
+                  <div key={p.id} style={{marginBottom:10}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                      <label style={{fontSize:12,fontWeight:700,color:'#374151',display:'flex',alignItems:'center',gap:5}}>
+                        <span>{p.emoji}</span>{p.nom}
+                      </label>
+                      <span style={{fontSize:10,color:'#94A3B8'}}>objectif: {fmt(p.effort_mensuel)}/mois</span>
+                    </div>
+                    <div style={{position:'relative'}}>
+                      <input type="number" value={repartEp[p.id]||''} onChange={e=>setRepartEp({...repartEp,[p.id]:e.target.value})}
+                        placeholder={String(p.effort_mensuel)}
+                        style={{width:'100%',padding:'9px 40px 9px 12px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:13,background:'#fff',fontFamily:'inherit'}}
+                        onFocus={e=>e.target.style.borderColor=p.color} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+                      <span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',color:'#94A3B8',fontSize:12}}>€</span>
+                    </div>
+                  </div>
+                ))}
+                {(()=>{const total=Object.values(repartEp).reduce((s,v)=>s+(Number(v)||0),0);const reste=parseAmount(ep)-total;
+                  return <div style={{display:'flex',justifyContent:'space-between',paddingTop:8,borderTop:'1px solid #E5E7EB',marginTop:4}}>
+                    <span style={{fontSize:12,color:'#64748B',fontWeight:600}}>Total réparti</span>
+                    <span style={{fontSize:12,fontWeight:700,padding:'2px 8px',borderRadius:20,
+                      background:Math.abs(reste)<1?'#D1FAE5':reste<0?'#FEE2E2':'#FEF3C7',
+                      color:Math.abs(reste)<1?'#065F46':reste<0?'#B91C1C':'#92400E'}}>
+                      {fmt(total)} {Math.abs(reste)<1?'✓':reste<0?`(${fmt(-reste)} de trop)`:`(${fmt(reste)} restant)`}
+                    </span>
+                  </div>;
+                })()}
+              </div>
+            )}
+          </div>
+        )}
+        <div style={{marginBottom:10}}>
+          <label style={{fontSize:11,fontWeight:700,color:'#6B7280',display:'block',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.7px'}}>📈 Investissements</label>
+          <InvestissementsEditor investissements={investissements} onChange={v=>{setInvestissements(v);setRepartPl({});}}/>
+        </div>
+        {projets.filter(p=>p.type==='invest').length>0&&totalPl>0&&(
+          <div style={{marginTop:-8,marginBottom:4}}>
+            <button onClick={()=>setShowPlDetails(!showPlDetails)}
+              style={{fontSize:11,fontWeight:600,color:'#64748B',background:'none',border:'none',cursor:'pointer',padding:'2px 0',display:'flex',alignItems:'center',gap:4}}>
+              <span style={{fontSize:12,display:'inline-block',transform:showPlDetails?'rotate(90deg)':'rotate(0deg)',transition:'transform 0.2s'}}>›</span>
+              {showPlDetails?'Masquer les détails':'Répartir entre mes projets'}
+            </button>
+            {showPlDetails&&(
+              <div className="fade-in" style={{marginTop:8,padding:'14px',background:'#F8FAFC',borderRadius:12,border:'1px solid #E5E7EB'}}>
+                <p style={{fontSize:11,color:'#94A3B8',marginBottom:10}}>Placements à répartir : <strong style={{color:'#0F172A'}}>{fmt(totalPl)}</strong></p>
+                {projets.filter(p=>p.type==='invest').map(p=>(
+                  <div key={p.id} style={{marginBottom:10}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                      <label style={{fontSize:12,fontWeight:700,color:'#374151',display:'flex',alignItems:'center',gap:5}}>
+                        <span>{p.emoji}</span>{p.nom}
+                      </label>
+                      <span style={{fontSize:10,color:'#94A3B8'}}>objectif: {fmt(p.effort_mensuel)}/mois</span>
+                    </div>
+                    <div style={{position:'relative'}}>
+                      <input type="number" value={repartPl[p.id]||''} onChange={e=>setRepartPl({...repartPl,[p.id]:e.target.value})}
+                        placeholder={String(p.effort_mensuel)}
+                        style={{width:'100%',padding:'9px 40px 9px 12px',border:'1.5px solid #E5E7EB',borderRadius:10,fontSize:13,background:'#fff',fontFamily:'inherit'}}
+                        onFocus={e=>e.target.style.borderColor=p.color} onBlur={e=>e.target.style.borderColor='#E5E7EB'}/>
+                      <span style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',color:'#94A3B8',fontSize:12}}>€</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </Card>
       {hasValues&&<Card style={{marginBottom:14}} className="fade-in">
         <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:14}}>
@@ -981,7 +1675,7 @@ function AddMonthScreen({user,bilans,params,onSave,onBack}){
   </div>);
 }
 
-function DashboardScreen({bilans,params,onAddMonth,onDeconnexion,onUpdateBilan}){
+function DashboardScreen({bilans,params,projets,onAddMonth,onDeconnexion,onUpdateBilan}){
   const [activeTab,setActiveTab]=useState('score');
   const [selectedBilan,setSelectedBilan]=useState(null);
   const sorted=[...bilans].sort((a,b)=>a.mois.localeCompare(b.mois));
@@ -989,18 +1683,21 @@ function DashboardScreen({bilans,params,onAddMonth,onDeconnexion,onUpdateBilan})
   const{score,details,patrimoine,deltaEp,deltaPl}=last?calcScore(last,params,prev):{score:0,details:{},patrimoine:0,deltaEp:0,deltaPl:0};
   const col=scoreColor(score);
   const graphScores=sorted.map((b,i)=>({label:moisLabel(b.mois).split(' ')[0],value:calcScore(b,params,sorted[i-1]||null).score}));
-  const graphPat=sorted.map(b=>({label:moisLabel(b.mois).split(' ')[0],value:b.compte_courant+b.epargne+b.placement}));
+  const graphPat=sorted.map(b=>({label:moisLabel(b.mois).split(' ')[0],value:b.compte_courant+b.epargne+(b.placement_valeur!=null?b.placement_valeur:b.placement)}));
   const graphEp=sorted.map(b=>({label:moisLabel(b.mois).split(' ')[0],value:b.epargne}));
   const graphPl=sorted.map(b=>({label:moisLabel(b.mois).split(' ')[0],value:b.placement}));
+  const lastPat=last?{cc:last.compte_courant||0,ep:last.epargne||0,pl:(last.placement_valeur!=null?last.placement_valeur:last.placement)||0}:{cc:0,ep:0,pl:0};
+  const donutPatData=[{label:'Compte courant',value:lastPat.cc,color:'#2563EB'},{label:'Épargne',value:lastPat.ep,color:'#10B981'},{label:'Investissements',value:lastPat.pl,color:'#D4A017'}].filter(d=>d.value>0);
+  const donutEffortData=[{label:'Épargne totale',value:sorted.at(-1)?.epargne||0,color:'#10B981'},{label:'Total investi',value:(sorted.at(-1)?.placement_valeur??sorted.at(-1)?.placement)||0,color:'#D4A017'}].filter(d=>d.value>0);
   return(<div style={{minHeight:'100vh',background:'#F0F3FA',paddingBottom:90}}>
-    {selectedBilan&&<BilanDetail bilan={selectedBilan} params={params} prevBilan={sorted[sorted.findIndex(b=>b.id===selectedBilan.id)-1]||null} onClose={()=>setSelectedBilan(null)} onUpdate={()=>{setSelectedBilan(null);onUpdateBilan();}} onDelete={()=>{setSelectedBilan(null);onUpdateBilan();}}/>}
+    {selectedBilan&&<BilanDetail bilan={selectedBilan} params={params} projets={projets} prevBilan={sorted[sorted.findIndex(b=>b.id===selectedBilan.id)-1]||null} onClose={()=>setSelectedBilan(null)} onUpdate={()=>{setSelectedBilan(null);onUpdateBilan();}} onDelete={()=>{setSelectedBilan(null);onUpdateBilan();}}/>}
     <div style={{background:'linear-gradient(150deg,#0B1437 0%,#162057 55%,#1D3086 100%)',padding:'22px 20px 0',boxShadow:'0 4px 24px rgba(11,20,55,0.3)'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}><img src={LOGO_ICON_SRC} alt="Orizcore" style={{height:36,borderRadius:"50%"}}/><div><p style={{color:'rgba(255,255,255,0.65)',fontSize:11}}>Tableau de bord</p>{params?.prenom&&<p style={{color:'white',fontSize:15,fontWeight:700,marginTop:2}}>Bonjour {params.prenom} 👋</p>}</div></div>
         <button onClick={onDeconnexion} style={{background:'rgba(255,255,255,0.15)',border:'none',color:'white',borderRadius:12,padding:'8px 14px',cursor:'pointer',fontSize:13,fontWeight:600}}>🔓 Déconnexion</button>
       </div>
       <div style={{display:'flex',gap:6,paddingBottom:12}}>
-        {[['score','📊 Score'],['graphiques','📈 Graphiques'],['badges','🏅 Badges']].map(([k,l])=><button key={k} onClick={()=>setActiveTab(k)} style={{padding:'7px 14px',borderRadius:20,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,whiteSpace:'nowrap',background:activeTab===k?'white':'rgba(255,255,255,0.15)',color:activeTab===k?'#0B1437':'white',transition:'all 0.2s'}}>{l}</button>)}
+        {[['score','🏠 Résumé'],['graphiques','📊 Données'],['badges','🏅 Badges']].map(([k,l])=><button key={k} onClick={()=>setActiveTab(k)} style={{padding:'7px 14px',borderRadius:20,border:'none',cursor:'pointer',fontSize:12,fontWeight:600,whiteSpace:'nowrap',background:activeTab===k?'white':'rgba(255,255,255,0.15)',color:activeTab===k?'#0B1437':'white',transition:'all 0.2s'}}>{l}</button>)}
       </div>
     </div>
     <div style={{padding:'16px 16px'}}>
@@ -1033,7 +1730,44 @@ function DashboardScreen({bilans,params,onAddMonth,onDeconnexion,onUpdateBilan})
             {[['Patrimoine',fmt(patrimoine),prev&&(patrimoine>=prev.compte_courant+prev.epargne+prev.placement?'▲ Progression':'▼ En baisse')],['Épargne ce mois',fmt(deltaEp),params?.objectif_epargne>0?`Obj. ${fmt(params.objectif_epargne)}`:null],['Compte courant',fmt(last.compte_courant),null],['Placement ce mois',fmt(deltaPl),params?.objectif_investissement>0?`Obj. ${fmt(params.objectif_investissement)}`:null]]
               .map(([label,val,sub])=><Card key={label}><p style={{fontSize:11,color:'#94A3B8',fontWeight:700,textTransform:'uppercase',marginBottom:4}}>{label}</p><p style={{fontSize:17,fontWeight:800,color:'#2563EB'}}>{val}</p>{sub&&<p style={{fontSize:11,color:'#64748B',marginTop:3}}>{sub}</p>}</Card>)}
           </div>
-          <Card>
+
+          {/* ─── Donut répartition patrimoine dans le résumé ─── */}
+          {donutPatData.length>0&&<Card className="fade-in" style={{marginBottom:14}}>
+            <GraphDonut data={donutPatData} label="Répartition du patrimoine"/>
+          </Card>}
+
+          {/* ─── Projets en cours (motivant, juste après le patrimoine) ─── */}
+          {projets.length>0&&<>
+            <div style={{marginBottom:6,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <p style={{fontSize:12,fontWeight:700,color:'#64748B',textTransform:'uppercase',letterSpacing:'0.5px'}}>🎯 Mes projets en cours</p>
+              <span style={{fontSize:11,color:'#2563EB',fontWeight:700}}>{projets.length} projet{projets.length>1?'s':''}</span>
+            </div>
+            <Card className="fade-in" style={{marginBottom:14}}>
+              {projets.map(p=>{
+                const pct=p.montant>0?Math.min(100,Math.round((p.actuel||0)/p.montant*100)):0;
+                const moisR=p.effort_mensuel>0?Math.ceil(Math.max(0,p.montant-(p.actuel||0))/p.effort_mensuel):null;
+                return(
+                  <div key={p.id} style={{marginBottom:16}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                      <div style={{display:'flex',alignItems:'center',gap:8}}>
+                        <div style={{width:34,height:34,borderRadius:8,background:p.color+'18',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{p.emoji}</div>
+                        <div>
+                          <p style={{fontWeight:700,fontSize:13,color:'#0F172A'}}>{p.nom}</p>
+                          <p style={{fontSize:11,color:'#94A3B8'}}>{fmt(p.actuel||0)} / {fmt(p.montant)}{moisR?` · ${moisR} mois`:''}</p>
+                        </div>
+                      </div>
+                      <div style={{width:40,height:40,borderRadius:'50%',background:p.color+'15',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <span style={{fontSize:12,fontWeight:800,color:p.color}}>{pct}%</span>
+                      </div>
+                    </div>
+                    <ProjetProgressBar pct={pct} color={p.color} height={6}/>
+                  </div>
+                );
+              })}
+            </Card>
+          </>}
+
+          <Card style={{marginBottom:14}}>
             <h3 style={{fontSize:14,fontWeight:700,color:'#1E293B',marginBottom:6,textTransform:'uppercase',letterSpacing:'0.5px'}}>📋 Historique</h3>
             <p style={{fontSize:11,color:'#94A3B8',marginBottom:12}}>Appuie sur un mois pour voir le détail ou modifier</p>
             <div style={{display:'flex',flexDirection:'column',gap:8}}>
@@ -1048,11 +1782,40 @@ function DashboardScreen({bilans,params,onAddMonth,onDeconnexion,onUpdateBilan})
               })}
             </div>
           </Card>
+
+          {/* ─── Derniers badges (motivant mais discret, juste après l'historique) ─── */}
+          {(()=>{
+            const {badges}=calcBadges(bilans,params);
+            const recent=badges.filter(b=>b.ok).slice(-3);
+            return recent.length>0&&(
+              <Card className="fade-in" style={{marginTop:14}}>
+                <p style={{fontSize:12,fontWeight:700,color:'#64748B',textTransform:'uppercase',letterSpacing:'0.5px',marginBottom:12}}>🏆 Derniers badges obtenus</p>
+                <div style={{display:'flex',gap:10}}>
+                  {recent.map(b=>(
+                    <div key={b.id} style={{flex:1,padding:'10px 8px',borderRadius:12,background:'#F0FDF4',border:'1.5px solid #BBF7D0',textAlign:'center'}}>
+                      <p style={{fontSize:22,marginBottom:4}}>{b.emoji}</p>
+                      <p style={{fontSize:10,fontWeight:700,color:'#065F46',lineHeight:1.3}}>{b.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            );
+          })()}
         </>
       ))}
       {activeTab==='graphiques'&&<>
+        {/* ─── Graphiques linéaires ─── */}
         <Card style={{marginBottom:14}}><GraphLine data={graphScores} color="#2E5FA3" label="Score de discipline" format={v=>`${Math.round(v)}/100`}/></Card>
         <Card style={{marginBottom:14}}><GraphLine data={graphPat} color="#0B1437" label="Patrimoine total" format={fmtK}/></Card>
+
+        {/* ─── Donuts ici, entre patrimoine et épargne ─── */}
+        {last&&donutPatData.length>0&&<Card style={{marginBottom:14}}>
+          <GraphDonut data={donutPatData} label="Répartition du patrimoine"/>
+        </Card>}
+        {last&&donutEffortData.length>1&&<Card style={{marginBottom:14}}>
+          <GraphDonut data={donutEffortData} label="Épargne vs Investissement"/>
+        </Card>}
+
         <Card style={{marginBottom:14}}><GraphLine data={graphEp} color="#10B981" label="Épargne" format={fmtK}/></Card>
         <Card style={{marginBottom:14}}><GraphLine data={graphPl} color="#D4A017" label="Investissements" format={fmtK}/></Card>
       </>}
@@ -1063,6 +1826,7 @@ function DashboardScreen({bilans,params,onAddMonth,onDeconnexion,onUpdateBilan})
 
 function App(){
   const [user,setUser]=useState(null);const [params,setParams]=useState(null);const [bilans,setBilans]=useState([]);
+  const [projets,setProjets]=useState([]);
   const [screen,setScreen]=useState('dashboard');const [loading,setLoading]=useState(true);
   const [showTutorial,setShowTutorial]=useState(false);
   useEffect(()=>{
@@ -1090,7 +1854,7 @@ function App(){
         setLoading(false);
       }
       if(event==='SIGNED_OUT'){
-        setUser(null);setParams(null);setBilans([]);setScreen('dashboard');
+        setUser(null);setParams(null);setBilans([]);setProjets([]);setScreen('dashboard');
       }
       if(event==='PASSWORD_RECOVERY'){
         // laisser le flow de reset gérer ça
@@ -1098,14 +1862,14 @@ function App(){
     });
     return()=>subscription.unsubscribe();
   },[]);
-  async function loadData(uid){const{data:p}=await supabase.from('params').select().eq('user_id',uid).single();setParams(p);const{data:b}=await supabase.from('bilans').select().eq('user_id',uid).order('mois');setBilans(b||[]);}
+  async function loadData(uid){const{data:p}=await supabase.from('params').select().eq('user_id',uid).single();setParams(p);const{data:b}=await supabase.from('bilans').select().eq('user_id',uid).order('mois');setBilans(b||[]);const{data:pr}=await supabase.from('projets').select().eq('user_id',uid).eq('accompli',false).order('created_at');setProjets(pr||[]);}
   async function handleConnect(u){
     if(!u) return;
     setUser(u);
     await loadData(u.id);
     setLoading(false);
   }
-  async function handleDeconnexion(){await supabase.auth.signOut();setUser(null);setParams(null);setBilans([]);setScreen('dashboard');}
+  async function handleDeconnexion(){await supabase.auth.signOut();setUser(null);setParams(null);setBilans([]);setProjets([]);setScreen('dashboard');}
   if(loading) return(
   <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',
     background:'linear-gradient(160deg,#0B1437 0%,#162057 60%,#2563EB 100%)'}}>
@@ -1119,9 +1883,9 @@ function App(){
   if(!params) return <OnboardingFlow user={user} onSave={p=>{setParams(p);setScreen('dashboard');setShowTutorial(true);}}/>;
   return(<div className="app-shell" style={{position:'relative'}}>
     {showTutorial&&<TutorialOverlay onDone={()=>setShowTutorial(false)}/>}
-    {screen==='dashboard'&&<DashboardScreen bilans={bilans} params={params} onAddMonth={()=>setScreen('add')} onDeconnexion={handleDeconnexion} onUpdateBilan={()=>loadData(user.id)}/>}
-    {screen==='add'&&<AddMonthScreen user={user} bilans={bilans} params={params} onSave={async()=>{await loadData(user.id);setScreen('dashboard');}} onBack={()=>setScreen('dashboard')}/>}
-    {screen==='params'&&<ParamsScreen user={user} params={params} onSave={p=>{setParams(p);setScreen('dashboard');}} onBack={()=>setScreen('dashboard')}/>}
+    {screen==='dashboard'&&<DashboardScreen bilans={bilans} params={params} projets={projets} onAddMonth={()=>setScreen('add')} onDeconnexion={handleDeconnexion} onUpdateBilan={()=>loadData(user.id)}/>}
+    {screen==='add'&&<AddMonthScreen user={user} bilans={bilans} params={params} projets={projets} onSave={async()=>{await loadData(user.id);setScreen('dashboard');}} onBack={()=>setScreen('dashboard')}/>}
+    {screen==='params'&&<ParamsScreen user={user} params={params} projets={projets} onSave={p=>{setParams(p);setScreen('dashboard');}} onUpdateProjets={()=>loadData(user.id)} onBack={()=>setScreen('dashboard')}/>}
     {screen==='dashboard'&&<div style={{position:'sticky',bottom:0,width:'100%',background:'rgba(255,255,255,0.97)',backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',borderTop:'1px solid rgba(11,20,55,0.07)',padding:'10px 0 max(10px,env(safe-area-inset-bottom))',display:'flex',zIndex:100,boxShadow:'0 -4px 20px rgba(11,20,55,0.07)'}}>
       <button onClick={()=>setScreen('dashboard')} style={{flex:1,background:'none',border:'none',cursor:'pointer',padding:'6px 0',display:'flex',flexDirection:'column',alignItems:'center',gap:3}}><span style={{fontSize:20}}>📊</span><span style={{fontSize:10,fontWeight:700,color:'#0B1437',letterSpacing:'0.3px'}}>Tableau de bord</span></button>
       <div style={{flex:1,display:'flex',justifyContent:'center',alignItems:'center',paddingBottom:4}}><button onClick={()=>setScreen('add')} style={{width:52,height:52,borderRadius:26,background:'#D4A017',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(212,160,23,0.45)',fontSize:24,color:'white',fontWeight:700}}>+</button></div>
