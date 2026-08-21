@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orizcore — Ton horizon financier, enfin clair</title>
+<meta name="description" content="Application de discipline financière. Suis ton budget, mesure ton score de discipline et construis de bonnes habitudes mois après mois.">
+<link rel="icon" type="image/svg+xml" href="/icons/icon-192x192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-950:#0B1437;--navy-900:#0F1B44;--navy-800:#17234f;--navy-700:#202d5c;
+    --line:rgba(243,239,230,0.10);--gold:#E3A94B;--gold-soft:rgba(227,169,75,0.14);
+    --teal:#5FE0C6;--blue:#2563EB;--text:#F3EFE6;--text-muted:#A9B2CE;
+  }
+  *{box-sizing:border-box;} html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--navy-950);color:var(--text);font-family:'Inter',sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;margin:0;letter-spacing:-0.01em;}
+  p{margin:0;} .mono{font-family:'IBM Plex Mono',monospace;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px;} a{color:inherit;text-decoration:none;}
+
+  nav{position:sticky;top:0;z-index:20;background:rgba(11,20,55,0.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);}
+  .nav-inner{max-width:1080px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .brand{font-family:'Fraunces',serif;font-weight:700;font-size:1.1rem;letter-spacing:0.03em;}
+  .brand span{color:var(--gold);}
+  .nav-links{display:flex;gap:24px;align-items:center;}
+  @media(max-width:660px){.nav-links{display:none;}}
+  .nav-link{font-size:0.875rem;color:var(--text-muted);padding-bottom:2px;border-bottom:1px solid transparent;transition:color .15s,border-color .15s;}
+  .nav-link:hover{color:var(--text);} .nav-link.active{color:var(--text);border-color:var(--gold);}
+  .nav-cta{font-size:0.85rem;font-weight:600;background:var(--gold);color:var(--navy-950);padding:9px 20px;border-radius:999px;transition:opacity .2s;}
+  .nav-cta:hover{opacity:0.88;}
+
+  .section-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:0.73rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold);margin-bottom:14px;display:block;}
+  .btn-primary{background:var(--gold);color:var(--navy-950);font-weight:600;font-size:0.95rem;padding:13px 26px;border-radius:999px;border:none;cursor:pointer;display:inline-block;transition:transform .2s,opacity .2s;}
+  .btn-primary:hover{transform:translateY(-1px);opacity:0.9;}
+  .btn-ghost{color:var(--text);border:1px solid var(--line);font-weight:500;font-size:0.95rem;padding:13px 26px;border-radius:999px;display:inline-block;transition:border-color .15s;}
+  .btn-ghost:hover{border-color:var(--text-muted);}
+
+  /* HERO */
+  .hero{padding:90px 0 60px;position:relative;overflow:hidden;}
+  .hero-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:0.78rem;letter-spacing:0.18em;color:var(--teal);text-transform:uppercase;margin-bottom:18px;display:block;}
+  .hero h1{font-size:clamp(2.2rem,5vw,3.5rem);max-width:14ch;margin-bottom:20px;line-height:1.1;}
+  .hero p{color:var(--text-muted);font-size:1.05rem;max-width:46ch;margin-bottom:32px;}
+  .cta-row{display:flex;gap:14px;flex-wrap:wrap;}
+  .horizon{position:relative;height:200px;margin-top:48px;}
+  .horizon svg{width:100%;height:100%;display:block;}
+  .horizon-path{fill:none;stroke:var(--gold);stroke-width:2;stroke-dasharray:900;stroke-dashoffset:900;animation:draw 2.2s ease forwards 0.3s;}
+  .horizon-line{stroke:var(--line);stroke-width:1;}
+  .horizon-glow{fill:url(#glow);opacity:0;animation:fadein 1.5s ease forwards 1.4s;}
+  @keyframes draw{to{stroke-dashoffset:0;}}
+  @keyframes fadein{to{opacity:1;}}
+
+  /* PILLARS */
+  section{padding:80px 0;}
+  .section-head{max-width:60ch;margin-bottom:44px;}
+  .section-head h2{font-size:clamp(1.6rem,3vw,2.2rem);}
+  .section-head p{color:var(--text-muted);margin-top:14px;font-size:1rem;}
+  .pillars{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;}
+  @media(max-width:800px){.pillars{grid-template-columns:repeat(2,1fr);}}
+  @media(max-width:480px){.pillars{grid-template-columns:1fr;}}
+  .pillar{background:var(--navy-900);border:1px solid var(--line);border-radius:14px;padding:26px 20px;}
+  .pillar .mark{font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--teal);margin-bottom:14px;display:block;}
+  .pillar h3{font-size:1.05rem;font-weight:600;margin-bottom:8px;}
+  .pillar p{color:var(--text-muted);font-size:0.9rem;}
+
+  /* SCORE PREVIEW */
+  .score-preview{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;}
+  @media(max-width:800px){.score-preview{grid-template-columns:1fr;}}
+  .score-card{background:var(--navy-900);border:1px solid var(--line);border-radius:18px;padding:32px;}
+  .score-big{font-family:'IBM Plex Mono',monospace;font-size:3.2rem;color:var(--gold);line-height:1;}
+  .score-big span{font-size:1.2rem;color:var(--text-muted);}
+  .bar-row{margin-top:18px;}
+  .bar-label{display:flex;justify-content:space-between;font-size:0.82rem;color:var(--text-muted);margin-bottom:6px;}
+  .bar-track{height:8px;background:var(--navy-800);border-radius:99px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:99px;background:var(--teal);}
+
+  /* HOW IT WORKS */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;}
+  @media(max-width:700px){.steps{grid-template-columns:1fr;}}
+  .step{background:var(--navy-900);border:1px solid var(--line);border-radius:14px;padding:28px 22px;}
+  .step-num{font-family:'IBM Plex Mono',monospace;font-size:0.75rem;color:var(--teal);margin-bottom:14px;display:block;}
+  .step h3{font-size:1rem;font-weight:600;margin-bottom:8px;}
+  .step p{color:var(--text-muted);font-size:0.88rem;}
+
+  /* QUIZ TEASER */
+  .teaser-section{background:var(--navy-900);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:64px 0;}
+  .teaser-card{display:flex;align-items:center;justify-content:space-between;gap:32px;flex-wrap:wrap;}
+  .teaser-card h2{font-size:clamp(1.4rem,3vw,1.9rem);}
+  .teaser-card p{color:var(--text-muted);margin-top:12px;max-width:46ch;font-size:0.95rem;}
+
+  /* BETA BANNER */
+  .beta-banner{background:var(--gold-soft);border:1px solid var(--gold);border-radius:14px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:40px 0 0;}
+  .beta-banner p{font-size:0.9rem;color:var(--text);}
+  .beta-banner strong{color:var(--gold);}
+
+  /* FOOTER */
+  footer{border-top:1px solid var(--line);padding:52px 0 32px;}
+  .footer-grid{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:40px;margin-bottom:40px;}
+  @media(max-width:700px){.footer-grid{grid-template-columns:1fr;gap:28px;}}
+  .footer-brand{font-family:'Fraunces',serif;font-weight:700;font-size:1.1rem;margin-bottom:10px;}
+  .footer-brand span{color:var(--gold);}
+  .footer-desc{font-size:0.875rem;color:var(--text-muted);line-height:1.6;margin-top:6px;}
+  .footer-col h4{font-family:'IBM Plex Mono',monospace;font-size:0.72rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--teal);margin-bottom:14px;font-weight:500;}
+  .footer-col a{display:block;font-size:0.875rem;color:var(--text-muted);margin-bottom:8px;transition:color .15s;}
+  .footer-col a:hover{color:var(--text);}
+  .footer-bottom{border-top:1px solid var(--line);padding-top:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
+  .footer-copy{font-size:0.8rem;color:var(--text-muted);}
+  .footer-legal{display:flex;gap:20px;}
+  .footer-legal a{font-size:0.8rem;color:var(--text-muted);transition:color .15s;}
+  .footer-legal a:hover{color:var(--text);}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="brand">ORIZ<span>CORE</span></a>
+    <div class="nav-links">
+      <a href="/" class="nav-link active">Accueil</a>
+      <a href="/quiz.html" class="nav-link">Test santé financière</a>
+    </div>
+    <a class="nav-cta" href="https://app.orizcore.com" target="_blank" rel="noopener">Ouvrir l'appli</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <span class="hero-eyebrow">Score de discipline financière</span>
+    <h1>Vois où va ton argent.<br>Vois où tu vas.</h1>
+    <p>Répartition intelligente entre charges, épargne, investissement et plaisirs — et un score de discipline financière recalculé à chaque bilan mensuel.</p>
+    <div class="cta-row">
+      <a class="btn-primary" href="/quiz.html">Faire mon bilan en 2 minutes</a>
+      <a class="btn-ghost" href="https://app.orizcore.com" target="_blank" rel="noopener">Découvrir l'appli</a>
+    </div>
+    <div class="horizon" aria-hidden="true">
+      <svg viewBox="0 0 800 210" preserveAspectRatio="none">
+        <defs>
+          <radialGradient id="glow" cx="50%" cy="100%" r="70%">
+            <stop offset="0%" stop-color="#E3A94B" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#E3A94B" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <line x1="0" y1="150" x2="800" y2="150" class="horizon-line"/>
+        <circle cx="400" cy="150" r="160" class="horizon-glow"/>
+        <path class="horizon-path" d="M0,175 C120,175 150,110 260,95 C360,82 420,140 500,120 C600,95 660,40 800,20"/>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<section id="pillars">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-eyebrow">Le principe</span>
+      <h2>Quatre piliers, une seule vue d'ensemble</h2>
+      <p>Chaque euro a une destination. Orizcore t'aide à répartir ton budget entre ce qui te protège, ce qui te fait grandir, et ce qui te fait plaisir.</p>
+    </div>
+    <div class="pillars">
+      <div class="pillar"><span class="mark">01</span><h3>Charges fixes</h3><p>Ce que tu dois payer, sans surprise et sans y penser.</p></div>
+      <div class="pillar"><span class="mark">02</span><h3>Épargne</h3><p>Ton matelas de sécurité, alimenté régulièrement.</p></div>
+      <div class="pillar"><span class="mark">03</span><h3>Investissement</h3><p>La part qui travaille pour toi sur le long terme.</p></div>
+      <div class="pillar"><span class="mark">04</span><h3>Plaisirs</h3><p>Dépenser sans culpabilité, parce que c'est prévu.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="preview" style="padding-top:0;">
+  <div class="wrap">
+    <div class="score-preview">
+      <div>
+        <span class="section-eyebrow">Bilan mensuel</span>
+        <h2>Un score qui évolue avec toi</h2>
+        <p style="color:var(--text-muted);margin-top:14px;">Après chaque bilan, Orizcore affiche ton score de discipline financière et l'évolution de ton patrimoine, réparti par pilier. Tu vois exactement où tu progresses — et où ajuster.</p>
+        <div style="margin-top:28px;display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem;color:var(--text-muted);">
+            <span style="color:var(--teal);font-size:1.1rem;">✓</span> Tableau de bord avec score mensuel
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem;color:var(--text-muted);">
+            <span style="color:var(--teal);font-size:1.1rem;">✓</span> Suivi de tes projets d'épargne et d'investissement
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem;color:var(--text-muted);">
+            <span style="color:var(--teal);font-size:1.1rem;">✓</span> Graphiques d'évolution de ton patrimoine
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:0.9rem;color:var(--text-muted);">
+            <span style="color:var(--teal);font-size:1.1rem;">✓</span> Badges de progression et gamification
+          </div>
+        </div>
+      </div>
+      <div class="score-card">
+        <div class="score-big">74<span>/100</span></div>
+        <div style="color:var(--text-muted);font-size:0.85rem;margin-top:6px;">Score de discipline — Juillet</div>
+        <div class="bar-row"><div class="bar-label"><span>Suivi mensuel</span><span>✓</span></div><div class="bar-track"><div class="bar-fill" style="width:100%;"></div></div></div>
+        <div class="bar-row"><div class="bar-label"><span>Patrimoine stable</span><span>✓</span></div><div class="bar-track"><div class="bar-fill" style="width:100%;"></div></div></div>
+        <div class="bar-row"><div class="bar-label"><span>Objectif épargne</span><span>⚠</span></div><div class="bar-track"><div class="bar-fill" style="width:60%;background:var(--gold);"></div></div></div>
+        <div class="bar-row"><div class="bar-label"><span>Objectif investissement</span><span>✓</span></div><div class="bar-track"><div class="bar-fill" style="width:100%;"></div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" style="padding-top:0;">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="section-eyebrow">Comment ça marche</span>
+      <h2>Simple. Rapide. Efficace.</h2>
+      <p>Deux minutes par mois suffisent pour avoir une vision claire de ta situation financière.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><span class="step-num">ÉTAPE 01</span><h3>Configure tes paramètres</h3><p>Renseigne tes revenus, charges fixes et définis tes objectifs d'épargne et d'investissement une seule fois.</p></div>
+      <div class="step"><span class="step-num">ÉTAPE 02</span><h3>Renseigne ton bilan mensuel</h3><p>Chaque mois, entre tes vrais soldes — compte courant, épargne, investissements. En deux minutes.</p></div>
+      <div class="step"><span class="step-num">ÉTAPE 03</span><h3>Suis ta progression</h3><p>Orizcore calcule ton score, affiche tes tendances et te montre exactement sur quel pilier progresser.</p></div>
+    </div>
+    <div class="beta-banner">
+      <p>🚀 Orizcore est disponible gratuitement — crée ton compte et commence à suivre ta discipline financière dès aujourd'hui.</p>
+      <a class="btn-primary" href="https://app.orizcore.com" target="_blank" rel="noopener" style="white-space:nowrap;">Accéder à l'application</a>
+    </div>
+  </div>
+</section>
+
+<div class="teaser-section">
+  <div class="wrap">
+    <div class="teaser-card">
+      <div>
+        <span class="section-eyebrow">Test rapide · 2 min</span>
+        <h2>Quelle est ta santé financière aujourd'hui ?</h2>
+        <p>8 questions simples, une estimation honnête de tes habitudes — pas besoin de connaître tes chiffres exacts.</p>
+      </div>
+      <a class="btn-primary" href="/quiz.html">Faire le test</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-brand">ORIZ<span>CORE</span></div>
+        <p class="footer-desc">Application de discipline financière personnelle. Suis ton budget, mesure ta progression, construis de bonnes habitudes mois après mois.</p>
+      </div>
+      <div class="footer-col">
+        <h4>Navigation</h4>
+        <a href="/">Accueil</a>
+        <a href="/quiz.html">Test santé financière</a>
+        <a href="https://app.orizcore.com" target="_blank" rel="noopener">Ouvrir l'appli</a>
+      </div>
+      <div class="footer-col">
+        <h4>Contact & légal</h4>
+        <a href="mailto:support@orizcore.com">support@orizcore.com</a>
+        <a href="/cgv.html">Conditions d'utilisation</a>
+        <a href="https://fr.tipeee.com/orizcore1/" target="_blank" rel="noopener">🤝 Soutenir Orizcore</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span class="footer-copy">© 2025 Orizcore — Tous droits réservés</span>
+      <div class="footer-legal">
+        <a href="/cgv.html">CGU</a>
+        <a href="mailto:support@orizcore.com">Contact</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
