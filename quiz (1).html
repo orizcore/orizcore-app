@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Test santé financière — Orizcore</title>
+<meta name="description" content="8 questions pour évaluer ta santé financière en 2 minutes. Gratuit, sans inscription.">
+<link rel="icon" type="image/svg+xml" href="/icons/icon-192x192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-950:#0B1437;--navy-900:#0F1B44;--navy-800:#17234f;
+    --line:rgba(243,239,230,0.10);--gold:#E3A94B;--gold-soft:rgba(227,169,75,0.14);
+    --teal:#5FE0C6;--text:#F3EFE6;--text-muted:#A9B2CE;
+  }
+  *{box-sizing:border-box;} html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--navy-950);color:var(--text);font-family:'Inter',sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;margin:0;letter-spacing:-0.01em;}
+  p{margin:0;} a{color:inherit;text-decoration:none;}
+
+  nav{position:sticky;top:0;z-index:20;background:rgba(11,20,55,0.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);}
+  .nav-inner{max-width:1080px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;gap:16px;}
+  .brand{font-family:'Fraunces',serif;font-weight:700;font-size:1.1rem;letter-spacing:0.03em;}
+  .brand span{color:var(--gold);}
+  .nav-links{display:flex;gap:24px;align-items:center;}
+  @media(max-width:660px){.nav-links{display:none;}}
+  .nav-link{font-size:0.875rem;color:var(--text-muted);padding-bottom:2px;border-bottom:1px solid transparent;transition:color .15s,border-color .15s;}
+  .nav-link:hover{color:var(--text);} .nav-link.active{color:var(--text);border-color:var(--gold);}
+  .nav-cta{font-size:0.85rem;font-weight:600;background:var(--gold);color:var(--navy-950);padding:9px 20px;border-radius:999px;transition:opacity .2s;}
+  .nav-cta:hover{opacity:0.88;}
+
+  main{padding:50px 16px 80px;}
+  .wrap{max-width:640px;margin:0 auto;}
+  .section-eyebrow{font-family:'IBM Plex Mono',monospace;font-size:0.73rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--teal);margin-bottom:12px;display:block;}
+  .intro{text-align:center;margin-bottom:32px;}
+  .intro h1{font-size:clamp(1.5rem,4vw,2rem);margin-bottom:10px;}
+  .intro p{color:var(--text-muted);font-size:0.95rem;max-width:44ch;margin:0 auto;}
+
+  .quiz-card{background:var(--navy-900);border:1px solid var(--line);border-radius:18px;padding:30px 26px;}
+  @media(min-width:600px){.quiz-card{padding:38px;}}
+  .progress-track{height:4px;background:var(--navy-800);border-radius:99px;margin-bottom:28px;overflow:hidden;}
+  .progress-fill{height:100%;background:var(--gold);border-radius:99px;transition:width .35s ease;}
+  .q-count{font-family:'IBM Plex Mono',monospace;font-size:0.78rem;color:var(--teal);margin-bottom:10px;display:block;}
+  .q-text{font-size:1.12rem;font-weight:600;font-family:'Fraunces',serif;margin-bottom:22px;line-height:1.4;}
+  .options{display:flex;flex-direction:column;gap:10px;}
+  .opt{background:var(--navy-950);border:1px solid var(--line);border-radius:10px;padding:14px 16px;cursor:pointer;font-size:0.95rem;text-align:left;color:var(--text);transition:border-color .15s,background .15s;width:100%;font-family:inherit;}
+  .opt:hover{border-color:var(--teal);}
+  .opt.selected{border-color:var(--gold);background:var(--gold-soft);}
+  .quiz-nav{display:flex;justify-content:space-between;margin-top:26px;gap:10px;}
+  .quiz-nav button{background:none;border:1px solid var(--line);color:var(--text-muted);padding:10px 20px;border-radius:999px;font-size:0.85rem;cursor:pointer;font-family:inherit;transition:border-color .15s;}
+  .quiz-nav button:disabled{opacity:0.3;cursor:default;}
+  .quiz-nav button:not(:disabled):hover{border-color:var(--text-muted);}
+  .quiz-nav .next{background:var(--gold);color:var(--navy-950);border:none;font-weight:600;}
+  .quiz-nav .next:hover{opacity:0.9;}
+
+  /* RESULT */
+  .result{display:none;}
+  .result.show{display:block;}
+  .result-score{text-align:center;margin-bottom:28px;}
+  .result-score .score-num{font-family:'IBM Plex Mono',monospace;font-size:4rem;color:var(--gold);line-height:1;}
+  .result-score .score-sub{color:var(--text-muted);font-size:0.9rem;margin-top:6px;}
+  .verdict{color:var(--text-muted);text-align:center;max-width:44ch;margin:0 auto 28px;font-size:0.95rem;line-height:1.6;}
+  .radar{display:flex;flex-direction:column;gap:16px;margin-bottom:24px;}
+  .radar-item .lbl{display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:6px;}
+  .radar-item .lbl .val{font-family:'IBM Plex Mono',monospace;color:var(--gold);}
+  .bar-track{height:8px;background:var(--navy-800);border-radius:99px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:99px;transition:width .6s ease;}
+  .flag{background:var(--gold-soft);border:1px solid var(--gold);border-radius:12px;padding:14px 18px;font-size:0.88rem;margin-bottom:26px;line-height:1.5;}
+  .result-cta{display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .btn-primary{background:var(--gold);color:var(--navy-950);font-weight:600;font-size:0.95rem;padding:13px 26px;border-radius:999px;border:none;cursor:pointer;display:inline-block;transition:transform .2s,opacity .2s;font-family:inherit;}
+  .btn-primary:hover{transform:translateY(-1px);opacity:0.9;}
+  .btn-ghost{color:var(--text);border:1px solid var(--line);font-size:0.9rem;padding:12px 24px;border-radius:999px;display:inline-block;}
+  .retry-link{color:var(--text-muted);font-size:0.85rem;text-decoration:underline;cursor:pointer;background:none;border:none;font-family:inherit;}
+  .divider{height:1px;background:var(--line);margin:24px 0;}
+
+  footer{border-top:1px solid var(--line);padding:36px 0;text-align:center;}
+  .footer-links{display:flex;justify-content:center;gap:24px;margin-bottom:12px;flex-wrap:wrap;}
+  .footer-links a{font-size:0.85rem;color:var(--text-muted);transition:color .15s;}
+  .footer-links a:hover{color:var(--text);}
+  .footer-copy{font-size:0.8rem;color:var(--text-muted);}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-inner">
+    <a href="/" class="brand">ORIZ<span>CORE</span></a>
+    <div class="nav-links">
+      <a href="/" class="nav-link">Accueil</a>
+      <a href="/quiz.html" class="nav-link active">Test santé financière</a>
+    </div>
+    <a class="nav-cta" href="https://app.orizcore.com" target="_blank" rel="noopener">Ouvrir l'appli</a>
+  </div>
+</nav>
+
+<main>
+  <div class="wrap">
+    <div class="intro">
+      <span class="section-eyebrow">Test rapide · 2 minutes</span>
+      <h1>Quelle est ta santé financière aujourd'hui ?</h1>
+      <p>8 questions simples, pas besoin de connaître tes chiffres exacts. Réponds honnêtement pour un résultat juste.</p>
+    </div>
+
+    <div class="quiz-card">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+
+      <div id="quizBody">
+        <span class="q-count" id="qCount">Question 1 / 8</span>
+        <div class="q-text" id="qText"></div>
+        <div class="options" id="qOptions"></div>
+        <div class="quiz-nav">
+          <button id="prevBtn">← Précédent</button>
+          <button id="nextBtn" class="next" disabled>Suivant →</button>
+        </div>
+      </div>
+
+      <div class="result" id="resultBody">
+        <div class="result-score">
+          <div class="score-num" id="totalScore">--</div>
+          <div class="score-sub">/100 · ta santé financière estimée</div>
+        </div>
+        <p class="verdict" id="verdictText"></p>
+        <div class="divider"></div>
+        <div class="radar" id="radarBars"></div>
+        <div class="flag" id="flagBox"></div>
+        <div class="result-cta">
+          <a class="btn-primary" href="https://app.orizcore.com" target="_blank" rel="noopener">Obtenir mon vrai score avec Orizcore</a>
+          <a class="btn-ghost" href="/">Découvrir le site Orizcore</a>
+          <button class="retry-link" onclick="restart()">↺ Refaire le test</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-links">
+    <a href="/">Accueil</a>
+    <a href="https://app.orizcore.com" target="_blank" rel="noopener">Ouvrir l'appli</a>
+    <a href="/cgv.html">CGU</a>
+    <a href="mailto:support@orizcore.com">Contact</a>
+  </div>
+  <p class="footer-copy">© 2025 Orizcore — Tous droits réservés</p>
+</footer>
+
+<script>
+const questions=[
+  {q:"Fais-tu un bilan de tes finances au moins une fois par mois ?",pillar:"Suivi",opts:[["Systématiquement",8],["De temps en temps",5],["Rarement",2],["Jamais",0]]},
+  {q:"Sais-tu à peu près combien tu as dépensé ce mois-ci ?",pillar:"Suivi",opts:[["Oui précisément",8],["À peu près",5],["Vaguement",2],["Aucune idée",0]]},
+  {q:"As-tu défini une répartition claire de ton argent (charges, épargne, investissement, plaisirs) ?",pillar:"Répartition",opts:[["Oui et je m'y tiens",8],["Oui mais pas toujours suivie",5],["J'y ai pensé sans le faire",2],["Jamais réfléchi",0]]},
+  {q:"Sais-tu quelle part de tes revenus part en charges fixes chaque mois ?",pillar:"Répartition",opts:[["Oui",8],["À peu près",5],["Non",0]]},
+  {q:"Mets-tu de l'argent de côté chaque mois de façon régulière ?",pillar:"Épargne & invest.",opts:[["Oui automatiquement",8],["Oui mais irrégulièrement",5],["Rarement",2],["Jamais",0]]},
+  {q:"As-tu commencé à investir une partie de ton argent (bourse, immobilier, etc.) ?",pillar:"Épargne & invest.",opts:[["Oui régulièrement",8],["Oui un peu",5],["J'y pense",2],["Jamais",0]]},
+  {q:"Quand tu te fais plaisir, le fais-tu en sachant que ton budget le permet ?",pillar:"Plaisirs",opts:[["Toujours",8],["Souvent",5],["Rarement",2],["Je ne me pose pas la question",0]]},
+  {q:"T'arrive-t-il de regretter une dépense plaisir en fin de mois ?",pillar:"Plaisirs",opts:[["Jamais",8],["Rarement",5],["Souvent",2],["Systématiquement",0]]}
+];
+const pillarOrder=["Suivi","Répartition","Épargne & invest.","Plaisirs"];
+const pillarMax={"Suivi":16,"Répartition":16,"Épargne & invest.":16,"Plaisirs":16};
+let current=0,answers=new Array(questions.length).fill(null);
+
+const qCount=document.getElementById('qCount'),qText=document.getElementById('qText'),qOptions=document.getElementById('qOptions');
+const prevBtn=document.getElementById('prevBtn'),nextBtn=document.getElementById('nextBtn'),progressFill=document.getElementById('progressFill');
+const quizBody=document.getElementById('quizBody'),resultBody=document.getElementById('resultBody');
+
+function render(){
+  const item=questions[current];
+  qCount.textContent=`Question ${current+1} / ${questions.length}`;
+  qText.textContent=item.q;
+  qOptions.innerHTML='';
+  item.opts.forEach(([label,pts])=>{
+    const btn=document.createElement('button');
+    btn.className='opt'+(answers[current]===pts?' selected':'');
+    btn.textContent=label;
+    btn.onclick=()=>{answers[current]=pts;render();};
+    qOptions.appendChild(btn);
+  });
+  prevBtn.disabled=current===0;
+  nextBtn.disabled=answers[current]===null;
+  nextBtn.textContent=current===questions.length-1?'Voir mon score →':'Suivant →';
+  progressFill.style.width=((current+1)/questions.length*100)+'%';
+}
+
+prevBtn.onclick=()=>{if(current>0){current--;render();}};
+nextBtn.onclick=()=>{
+  if(answers[current]===null)return;
+  if(current===questions.length-1){showResult();return;}
+  current++;render();
+};
+
+function showResult(){
+  const pillarScores={};
+  pillarOrder.forEach(p=>pillarScores[p]=0);
+  questions.forEach((item,i)=>{pillarScores[item.pillar]+=answers[i];});
+  let total=0;const scaled={};
+  pillarOrder.forEach(p=>{const s25=Math.round(pillarScores[p]/pillarMax[p]*25);scaled[p]=s25;total+=s25;});
+  document.getElementById('totalScore').textContent=total;
+  let verdict;
+  if(total>=80)verdict="Ta santé financière est solide. Tu as les bases pour accélérer sereinement.";
+  else if(total>=60)verdict="Ta santé financière est correcte, mais certains piliers méritent d'être renforcés.";
+  else if(total>=40)verdict="Ta santé financière est fragile — quelques ajustements simples peuvent tout changer.";
+  else verdict="Ta santé financière a besoin d'un vrai coup de pouce, et c'est le bon moment pour commencer.";
+  document.getElementById('verdictText').textContent=verdict;
+  const radarBars=document.getElementById('radarBars');
+  radarBars.innerHTML='';
+  let weakest=pillarOrder[0];
+  pillarOrder.forEach(p=>{if(scaled[p]<scaled[weakest])weakest=p;});
+  pillarOrder.forEach(p=>{
+    const pct=Math.round(scaled[p]/25*100);
+    const div=document.createElement('div');div.className='radar-item';
+    div.innerHTML=`<div class="lbl"><span>${p}</span><span class="val">${scaled[p]}/25</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${p===weakest?'var(--gold)':'var(--teal)'};"></div></div>`;
+    radarBars.appendChild(div);
+  });
+  document.getElementById('flagBox').textContent=`Point de vigilance : ${weakest}. C'est le pilier où Orizcore peut t'aider le plus rapidement.`;
+  progressFill.style.width='100%';
+  quizBody.style.display='none';
+  resultBody.classList.add('show');
+}
+
+function restart(){
+  current=0;answers=new Array(questions.length).fill(null);
+  resultBody.classList.remove('show');quizBody.style.display='block';render();
+}
+
+render();
+</script>
+</body>
+</html>
