@@ -265,11 +265,9 @@ function PctRow({emoji,label,pct,onChange,revenu,rest,editable,locked,exactAmoun
 
 
 function GraphDonut({data,label}){
-  // data = [{label, value, color}]
   const total=data.reduce((s,d)=>s+d.value,0);
   if(!total) return <div style={{textAlign:'center',padding:'24px 0',color:'#94A3B8',fontSize:13}}>Aucune donnée disponible</div>;
-
-  const R=70,CX=90,CY=90,strokeW=22;
+  const R=52,CX=68,CY=68,strokeW=16,SZ=136;
   const circumference=2*Math.PI*R;
   let offset=0;
   const arcs=data.map(d=>{
@@ -278,54 +276,47 @@ function GraphDonut({data,label}){
     offset+=pct;
     return arc;
   });
-
   const [hovered,setHovered]=useState(null);
   const hoveredItem=hovered!==null?arcs[hovered]:null;
-
   return(<div>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
       <span style={{fontSize:12,fontWeight:600,color:'#1E293B',textTransform:'uppercase',letterSpacing:'0.5px'}}>{label}</span>
       <span style={{fontSize:13,fontWeight:700,color:'#0B1437'}}>{fmtK(total)}</span>
     </div>
-    <div style={{display:'flex',alignItems:'center',gap:20}}>
-      {/* Donut SVG */}
-      <div style={{position:'relative',flexShrink:0}}>
-        <svg width={180} height={180} viewBox="0 0 180 180">
-          {/* Fond */}
+    <div style={{display:'flex',alignItems:'center',gap:12}}>
+      <div style={{flexShrink:0}}>
+        <svg width={SZ} height={SZ} viewBox={`0 0 ${SZ} ${SZ}`}>
           <circle cx={CX} cy={CY} r={R} fill="none" stroke="#F1F5F9" strokeWidth={strokeW}/>
-          {/* Arcs */}
           {arcs.map((arc,i)=>(
             <circle key={i} cx={CX} cy={CY} r={R} fill="none"
-              stroke={arc.color} strokeWidth={hovered===i?strokeW+4:strokeW}
+              stroke={arc.color} strokeWidth={hovered===i?strokeW+3:strokeW}
               strokeDasharray={arc.dasharray}
               strokeDashoffset={arc.dashoffset}
               strokeLinecap="butt"
               style={{cursor:'pointer',transition:'stroke-width 0.2s',transformOrigin:`${CX}px ${CY}px`,transform:'rotate(-90deg)'}}
               onMouseEnter={()=>setHovered(i)} onMouseLeave={()=>setHovered(null)}
-              onTouchStart={()=>setHovered(i)} onTouchEnd={()=>setHovered(null)}/>
+              onTouchStart={()=>setHovered(hovered===i?null:i)} onTouchEnd={()=>{}}/>
           ))}
-          {/* Centre */}
-          <text x={CX} y={CY-8} textAnchor="middle" fontSize="11" fill="#94A3B8" fontFamily="Inter,sans-serif">
-            {hoveredItem?hoveredItem.label:'Total'}
+          <text x={CX} y={CY-6} textAnchor="middle" fontSize="9" fill="#94A3B8" fontFamily="Inter,sans-serif">
+            {hoveredItem?hoveredItem.label.split(' ')[0]:'Total'}
           </text>
-          <text x={CX} y={CY+10} textAnchor="middle" fontSize="15" fontWeight="800" fill="#0F172A" fontFamily="Inter,sans-serif">
+          <text x={CX} y={CY+10} textAnchor="middle" fontSize="13" fontWeight="800" fill="#0F172A" fontFamily="Inter,sans-serif">
             {hoveredItem?`${Math.round(hoveredItem.pct*100)}%`:fmtK(total)}
           </text>
         </svg>
       </div>
-      {/* Légende */}
-      <div style={{flex:1}}>
+      <div style={{flex:1,minWidth:0}}>
         {arcs.map((arc,i)=>(
-          <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 10px',borderRadius:10,marginBottom:6,
-            background:hovered===i?arc.color+'12':'transparent',transition:'background 0.15s',cursor:'pointer'}}
+          <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 8px',borderRadius:8,marginBottom:4,
+            background:hovered===i?arc.color+'15':'transparent',transition:'background 0.15s',cursor:'pointer'}}
             onMouseEnter={()=>setHovered(i)} onMouseLeave={()=>setHovered(null)}>
-            <div style={{display:'flex',alignItems:'center',gap:8}}>
-              <div style={{width:10,height:10,borderRadius:'50%',background:arc.color,flexShrink:0}}/>
-              <span style={{fontSize:12,fontWeight:600,color:'#374151'}}>{arc.label}</span>
+            <div style={{display:'flex',alignItems:'center',gap:6,minWidth:0}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:arc.color,flexShrink:0}}/>
+              <span style={{fontSize:11,fontWeight:600,color:'#374151',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{arc.label}</span>
             </div>
-            <div style={{textAlign:'right'}}>
-              <span style={{fontSize:12,fontWeight:800,color:arc.color}}>{Math.round(arc.pct*100)}%</span>
-              <span style={{fontSize:11,color:'#94A3B8',marginLeft:4}}>{fmtK(arc.value)}</span>
+            <div style={{textAlign:'right',flexShrink:0,marginLeft:6}}>
+              <span style={{fontSize:11,fontWeight:800,color:arc.color}}>{Math.round(arc.pct*100)}%</span>
+              <span style={{fontSize:10,color:'#94A3B8',marginLeft:3}}>{fmtK(arc.value)}</span>
             </div>
           </div>
         ))}
@@ -1478,7 +1469,11 @@ function ParamsScreen({user,params,projets,onUpdateProjets,onSave,onBack}){
       </>}
       <div style={{height:16}}/>
       {reste<0&&tab==='budget'&&<div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:12,padding:'12px 16px',marginBottom:14}}><p style={{color:'#B91C1C',fontSize:13}}>⚠️ Total dépasse 100%. Réduis un poste.</p></div>}
-      <Btn onClick={()=>setShowModal(true)} disabled={saving||(tab==='budget'&&reste<-0.5)||rev===0} style={{width:'100%'}} variant="gold">{saving?'...':'✅ Enregistrer'}</Btn>
+      <Btn onClick={()=>{
+        const objChanged=mEpargne!==(params?.objectif_epargne||0)||mInvest!==(params?.objectif_investissement||0);
+        // Depuis l'onglet "Mes infos", pas besoin de la modal historique — sauvegarde directe
+        if(tab==='infos'||!objChanged) save(false); else setShowModal(true);
+      }} disabled={saving||(tab==='budget'&&reste<-0.5)||(tab!=='infos'&&rev===0)} style={{width:'100%'}} variant="gold">{saving?'...':'✅ Enregistrer'}</Btn>
 
       {/* ─── Soutien & Feedback ─── */}
       <div style={{marginTop:24,display:'flex',flexDirection:'column',gap:10}}>
@@ -1519,6 +1514,57 @@ function PasswordInput({label,value,onChange,placeholder,noToggle}){
       </button>}
     </div>
   </div>);
+}
+
+
+function PasswordResetScreen({onDone}){
+  const [newPwd,setNewPwd]=useState('');
+  const [confirm,setConfirm]=useState('');
+  const [loading,setLoading]=useState(false);
+  const [err,setErr]=useState('');
+  const [done,setDone]=useState(false);
+
+  async function updatePassword(){
+    if(!newPwd||!confirm){setErr('Remplis les deux champs.');return;}
+    if(newPwd!==confirm){setErr('Les mots de passe ne correspondent pas.');return;}
+    if(newPwd.length<6){setErr('Minimum 6 caractères.');return;}
+    setLoading(true);setErr('');
+    const{error}=await supabase.auth.updateUser({password:newPwd});
+    setLoading(false);
+    if(error){setErr(error.message);return;}
+    setDone(true);
+    setTimeout(()=>{supabase.auth.signOut();onDone();},2500);
+  }
+
+  return(
+    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:24,background:'linear-gradient(160deg,#0B1437 0%,#162057 60%,#2563EB 100%)'}}>
+      <div className="pop" style={{width:'100%',maxWidth:380}}>
+        <div style={{textAlign:'center',marginBottom:32}}>
+          <img src={LOGO_SRC} alt="Orizcore" style={{width:160,marginBottom:8}}/>
+        </div>
+        <div style={{background:'#fff',borderRadius:18,padding:'28px 24px',boxShadow:'0 8px 32px rgba(11,20,55,0.2)'}}>
+          {done?(
+            <div style={{textAlign:'center'}}>
+              <div style={{fontSize:48,marginBottom:12}}>✅</div>
+              <h2 style={{fontSize:18,fontWeight:700,color:'#0F172A',marginBottom:8}}>Mot de passe modifié !</h2>
+              <p style={{fontSize:13,color:'#64748B'}}>Tu vas être redirigé vers la connexion…</p>
+            </div>
+          ):(
+            <>
+              <h2 style={{fontSize:18,fontWeight:700,color:'#0F172A',marginBottom:6}}>🔐 Nouveau mot de passe</h2>
+              <p style={{fontSize:13,color:'#64748B',marginBottom:20,lineHeight:1.5}}>Choisis un nouveau mot de passe sécurisé pour ton compte Orizcore.</p>
+              <PasswordInput label="Nouveau mot de passe" value={newPwd} onChange={setNewPwd} placeholder="Min. 6 caractères"/>
+              <PasswordInput label="Confirmer le mot de passe" value={confirm} onChange={setConfirm} placeholder="Répète le mot de passe" noToggle/>
+              {err&&<p style={{color:'#B91C1C',fontSize:13,marginBottom:12,background:'#FEF2F2',padding:'8px 12px',borderRadius:10}}>⚠️ {err}</p>}
+              <Btn onClick={updatePassword} disabled={loading} style={{width:'100%'}} variant="gold">
+                {loading?'Enregistrement…':'Enregistrer le nouveau mot de passe'}
+              </Btn>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function AuthScreen({onConnect}){
@@ -1965,6 +2011,7 @@ function App(){
   const [projets,setProjets]=useState([]);
   const [screen,setScreen]=useState('dashboard');const [loading,setLoading]=useState(true);
   const [showTutorial,setShowTutorial]=useState(false);
+  const [showPasswordReset,setShowPasswordReset]=useState(false);
   useEffect(()=>{
     // 1. Vérifier la session existante au démarrage
     (async()=>{
@@ -1975,6 +2022,8 @@ function App(){
     // 2. Écouter tous les changements d'auth (crucial pour iOS PWA)
     const{data:{subscription}}=supabase.auth.onAuthStateChange(async(event,session)=>{
       if(event==='SIGNED_IN'&&session?.user){
+        // Ne pas connecter si on est dans un flow de reset de mot de passe
+        if(showPasswordReset) return;
         // Bloquer si email non confirmé
         if(!session.user.email_confirmed_at){
           await supabase.auth.signOut();
@@ -1993,7 +2042,10 @@ function App(){
         setUser(null);setParams(null);setBilans([]);setProjets([]);setScreen('dashboard');
       }
       if(event==='PASSWORD_RECOVERY'){
-        // laisser le flow de reset gérer ça
+        // Intercepter le lien de reset : empêcher la connexion auto
+        // et forcer l'affichage de l'écran de changement de mot de passe
+        setLoading(false);
+        setShowPasswordReset(true);
       }
     });
     return()=>subscription.unsubscribe();
@@ -2015,6 +2067,7 @@ function App(){
     </div>
   </div>
 );
+  if(showPasswordReset) return <PasswordResetScreen onDone={()=>setShowPasswordReset(false)}/>
   if(!user) return <AuthScreen onConnect={handleConnect}/>;
   if(!params) return <OnboardingFlow user={user} onSave={p=>{setParams(p);setScreen('dashboard');setShowTutorial(true);}}/>;
   return(<div className="app-shell" style={{position:'relative'}}>
