@@ -1,11 +1,11 @@
-const CACHE_NAME = 'orizcore-v3';
+const CACHE_NAME = 'orizcore-v4';
 
 // Fichiers statiques (icônes, polices, libs) — peuvent rester en cache
 const STATIC_ASSETS = [
-  '/manifest.json',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png',
-  '/icons/apple-touch-icon.png',
+  '/app/manifest.json',
+  '/app/icons/icon-192x192.png',
+  '/app/icons/icon-512x512.png',
+  '/app/icons/apple-touch-icon.png',
   'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js',
@@ -47,13 +47,13 @@ self.addEventListener('fetch', event => {
 
   // Navigation (index.html / app) — TOUJOURS réseau en priorité.
   // Le cache ne sert que si le réseau est indisponible (mode hors-ligne).
-  if (event.request.mode === 'navigate' || url.pathname === '/' || url.pathname.endsWith('.html')) {
+  if (event.request.mode === 'navigate' || url.pathname.startsWith('/app') || url.pathname === '/app/') {
     event.respondWith(
       fetch(event.request).then(response => {
         const toCache = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, toCache));
         return response;
-      }).catch(() => caches.match(event.request).then(r => r || caches.match('/index.html')))
+      }).catch(() => caches.match(event.request).then(r => r || caches.match('/app/index.html')))
     );
     return;
   }
