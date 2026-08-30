@@ -27,11 +27,20 @@ export default async function handler(req, res) {
   );
   const bilansFaits = new Set((await bilansRes.json()).map(b => b.user_id));
 
-  // 3. Récupérer les emails via l'API Auth admin
+    // 3. Récupérer les emails via l'API Auth admin
   const authRes = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
     headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
   });
   const authData = await authRes.json();
+
+  if (req.query.debug === '1') {
+    return res.status(200).json({
+      authStatus: authRes.status,
+      authDataKeys: Object.keys(authData),
+      authDataSample: JSON.stringify(authData).slice(0, 500)
+    });
+  }
+
   const emailByUserId = Object.fromEntries(authData.users.map(u => [u.id, u.email]));
 
   const aRelancer = users.filter(u => !bilansFaits.has(u.user_id) && emailByUserId[u.user_id]);
