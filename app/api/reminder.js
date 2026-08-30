@@ -1,6 +1,9 @@
 export default async function handler(req, res) {
   // Protection : évite que n'importe qui déclenche l'envoi
-  if (req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
+    const authHeader = req.headers['authorization'];
+  const querySecret = req.query.secret;
+  const expected = process.env.CRON_SECRET;
+  if (authHeader !== `Bearer ${expected}` && querySecret !== expected) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
