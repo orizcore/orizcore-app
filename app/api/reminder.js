@@ -11,6 +11,16 @@ export default async function handler(req, res) {
   const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const RESEND_API_KEY = process.env.RESEND_API_KEY;
 
+    if (req.query.debug === '1') {
+    return res.status(200).json({
+      supabaseUrlExists: !!SUPABASE_URL,
+      supabaseUrlValue: SUPABASE_URL,
+      serviceKeyExists: !!SUPABASE_SERVICE_KEY,
+      serviceKeyLength: SUPABASE_SERVICE_KEY ? SUPABASE_SERVICE_KEY.length : 0,
+      serviceKeyStart: SUPABASE_SERVICE_KEY ? SUPABASE_SERVICE_KEY.slice(0, 6) : null
+    });
+  }
+
   const currentMonth = new Date().toISOString().slice(0, 7); // "2026-08"
 
   // 1. Récupérer les users avec consentement marketing
