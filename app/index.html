@@ -1316,7 +1316,12 @@ function ParamsScreen({user,params,projets,onUpdateProjets,onSave,onBack}){
 
   // Fonctions CRUD projets
   async function addProjet(p){
-    await supabase.from('projets').insert({user_id:user.id,...p,actuel:0,accompli:false});
+    const {error}=await supabase.from('projets').insert({user_id:user.id,...p,actuel:0,accompli:false});
+    if(error){
+      alert('Erreur lors de l\'ajout du projet : '+error.message);
+      console.error('addProjet error:',error);
+      return;
+    }
     setShowProjetForm(false);
     onUpdateProjets();
   }
